@@ -26,6 +26,10 @@
         <div class="form-group">
             <label for="permissions">Permissions</label>
             <input type="text" id="permissions" name="permissions" placeholder="8" value="0">
+            <div class="field-help">
+                <button type="button" id="open-permissions-calculator" class="btn btn-sm">Open Official Calculator</button>
+                <span class="muted">Use Discord OAuth2 URL Generator to compute and copy the integer permission value.</span>
+            </div>
         </div>
         <div class="form-group">
             <label for="scopes">Scopes</label>
@@ -113,4 +117,20 @@
         <button type="submit" class="btn btn-sm">Logout</button>
     </form>
 </footer>
+<script>
+(() => {
+    const openBtn = document.getElementById("open-permissions-calculator");
+    const clientIDInput = document.getElementById("client_id");
+    if (!openBtn || !clientIDInput) return;
+
+    openBtn.addEventListener("click", () => {
+        const id = (clientIDInput.value || "").trim();
+        const isNumericID = /^[0-9]{16,22}$/.test(id);
+        const url = isNumericID
+            ? `https://discord.com/developers/applications/${id}/oauth2/url-generator`
+            : "https://discord.com/developers/applications";
+        window.open(url, "_blank", "noopener,noreferrer");
+    });
+})();
+</script>
 {{end}}

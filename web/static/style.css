@@ -89,6 +89,18 @@ header h1 {
     font-weight: 500;
 }
 
+.field-help {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-top: 0.35rem;
+    flex-wrap: wrap;
+}
+
+.field-help .muted {
+    font-size: 0.8rem;
+}
+
 input[type="text"],
 input[type="password"] {
     background: var(--bg-input);

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"time"
 
 	"dcportal/internal/discord"
 	"dcportal/internal/model"
@@ -22,7 +23,14 @@ type PortalHandler struct {
 	// In-memory state store for CSRF protection.
 	// Maps state → botID. Entries are single-use.
 	stateMu sync.Mutex
-	states  map[string]int64
+	states  map[string]stateEntry
+}
+
+const stateTTL = 10 * time.Minute
+
+type stateEntry struct {
+	BotID     int64
+	ExpiresAt time.Time
 }
 
 // NewPortalHandler creates a new PortalHandler.
@@ -32,7 +40,7 @@ func NewPortalHandler(s *store.Store, portalTmpl, resultTmpl *template.Template,
 		portalTmpl:    portalTmpl,
 		resultTmpl:    resultTmpl,
 		discordClient: dc,
-		states:        make(map[string]int64),
+		states:        make(map[string]stateEntry),
 	}
 }
 
@@ -87,7 +95,11 @@ func (h *PortalHandler) install(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.stateMu.Lock()
-	h.states[state] = bot.ID
+	h.pruneExpiredStatesLocked(time.Now())
+	h.states[state] = stateEntry{
+		BotID:     bot.ID,
+		ExpiresAt: time.Now().Add(stateTTL),
+	}
 	h.stateMu.Unlock()
 
 	http.Redirect(w, r, bot.OAuthURL(state), http.StatusTemporaryRedirect)
@@ -96,8 +108,6 @@ func (h *PortalHandler) install(w http.ResponseWriter, r *http.Request) {
 func (h *PortalHandler) callback(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	state := r.URL.Query().Get("state")
-	guildID := r.URL.Query().Get("guild_id")
-
 	// Discord may return an error (e.g. user denied)
 	if errMsg := r.URL.Query().Get("error"); errMsg != "" {
 		log.Printf("OAuth2 error from Discord: %s - %s", errMsg, r.URL.Query().Get("error_description"))
@@ -112,9 +122,12 @@ func (h *PortalHandler) callback(w http.ResponseWriter, r *http.Request) {
 
 	// Validate and consume state (single-use)
 	h.stateMu.Lock()
-	botID, ok := h.states[state]
-	if ok {
+	h.pruneExpiredStatesLocked(time.Now())
+	entry, ok := h.states[state]
+	if ok && time.Now().Before(entry.ExpiresAt) {
 		delete(h.states, state)
+	} else {
+		ok = false
 	}
 	h.stateMu.Unlock()
 
@@ -124,9 +137,9 @@ func (h *PortalHandler) callback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Look up the bot
-	bot, err := h.store.GetBot(botID)
+	bot, err := h.store.GetBot(entry.BotID)
 	if err != nil || bot == nil {
-		log.Printf("ERROR get bot %d: %v", botID, err)
+		log.Printf("ERROR get bot %d: %v", entry.BotID, err)
 		http.Error(w, "Bot not found", http.StatusNotFound)
 		return
 	}
@@ -136,25 +149,26 @@ func (h *PortalHandler) callback(w http.ResponseWriter, r *http.Request) {
 		bot.ClientID, bot.ClientSecret, code, bot.RedirectURI,
 	)
 	if err != nil {
-		log.Printf("ERROR exchange code for bot %d: %v", botID, err)
+		log.Printf("ERROR exchange code for bot %d: %v", entry.BotID, err)
 		h.renderResult(w, false, "Failed to complete authorization with Discord. Please try again.", "", "", "")
 		return
 	}
 
 	// Determine guild info
+	guildID := ""
 	guildName := ""
 	if tokenResp.Guild != nil {
-		if guildID == "" {
-			guildID = tokenResp.Guild.ID
-		}
+		guildID = tokenResp.Guild.ID
 		guildName = tokenResp.Guild.Name
-	}
-
-	// Record the installation
-	if guildID != "" {
-		if _, err := h.store.RecordInstall(botID, guildID, guildName); err != nil {
-			log.Printf("ERROR record install: %v", err)
+		if guildID != "" {
+			if _, err := h.store.RecordInstall(entry.BotID, guildID, guildName); err != nil {
+				log.Printf("ERROR record install: %v", err)
+			}
+		} else {
+			log.Printf("WARN token response missing guild ID for bot %d", entry.BotID)
 		}
+	} else {
+		log.Printf("WARN token response missing guild info for bot %d", entry.BotID)
 	}
 
 	// Revoke the access token (we don't need it — we only needed the bot authorization)
@@ -193,4 +207,12 @@ func (h *PortalHandler) renderResult(w http.ResponseWriter, success bool, messag
 // generateState wraps model.GenerateState for easy testing override.
 var generateState = func() (string, error) {
 	return model.GenerateState()
+}
+
+func (h *PortalHandler) pruneExpiredStatesLocked(now time.Time) {
+	for key, value := range h.states {
+		if !now.Before(value.ExpiresAt) {
+			delete(h.states, key)
+		}
+	}
 }

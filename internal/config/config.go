@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 
 	"gopkg.in/yaml.v3"
 )
@@ -45,7 +46,11 @@ func Load(path string) (*Config, error) {
 
 	// Environment variable overrides
 	if v := os.Getenv("DCPORTAL_PORT"); v != "" {
-		fmt.Sscanf(v, "%d", &cfg.Server.Port)
+		port, err := strconv.Atoi(v)
+		if err != nil || port < 1 || port > 65535 {
+			return nil, fmt.Errorf("invalid DCPORTAL_PORT value %q", v)
+		}
+		cfg.Server.Port = port
 	}
 	if v := os.Getenv("DCPORTAL_BASE_URL"); v != "" {
 		cfg.Server.BaseURL = v

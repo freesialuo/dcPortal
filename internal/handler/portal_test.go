@@ -52,6 +52,31 @@ func newMockDiscord(t *testing.T) (*discord.Client, *httptest.Server) {
 	return discord.NewClientWithBase(server.URL, server.Client()), server
 }
 
+func newMockDiscordNoGuild(t *testing.T) (*discord.Client, *httptest.Server) {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/oauth2/token" {
+			resp := discord.TokenResponse{
+				AccessToken:  "mock-token",
+				TokenType:    "Bearer",
+				ExpiresIn:    604800,
+				RefreshToken: "mock-refresh",
+				Scope:        "bot",
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+		if r.URL.Path == "/oauth2/token/revoke" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		http.Error(w, "not found", 404)
+	}))
+	t.Cleanup(server.Close)
+	return discord.NewClientWithBase(server.URL, server.Client()), server
+}
+
 func testPortalTmpl() *template.Template {
 	tmpl := template.Must(template.New("layout.html").Parse(
 		`{{block "content" .}}{{end}}`))
@@ -266,5 +291,46 @@ func TestPortalCallbackStateIsSingleUse(t *testing.T) {
 	mux.ServeHTTP(w, req)
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("replay attack should be rejected, got status %d", w.Code)
+	}
+}
+
+func TestPortalCallbackIgnoresUnverifiedGuildID(t *testing.T) {
+	s := newTestStore2(t)
+	dc, _ := newMockDiscordNoGuild(t)
+
+	s.CreateBot(&model.Bot{
+		Name: "Bot1", ClientID: "123456", ClientSecret: "secret",
+		Scopes: "bot", RedirectURI: "http://localhost:8080/callback", Enabled: true,
+	})
+
+	h := NewPortalHandler(s, testPortalTmpl(), testResultTmpl(), dc)
+
+	origGenState := generateState
+	generateState = func() (string, error) { return "test-state-no-guild", nil }
+	t.Cleanup(func() { generateState = origGenState })
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("GET", "/install/1", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("install redirect status = %d", w.Code)
+	}
+
+	req = httptest.NewRequest("GET", "/callback?code=auth-code-123&state=test-state-no-guild&guild_id=forged-guild", nil)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("callback status = %d, want 200", w.Code)
+	}
+
+	installs, err := s.ListInstalls()
+	if err != nil {
+		t.Fatalf("ListInstalls: %v", err)
+	}
+	if len(installs) != 0 {
+		t.Fatalf("expected 0 installs when guild is not returned by Discord, got %d", len(installs))
 	}
 }

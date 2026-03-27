@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"html/template"
 	"log"
 	"net/http"
@@ -97,6 +98,10 @@ func (h *AdminHandler) toggleBot(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.store.ToggleBot(id); err != nil {
 		log.Printf("ERROR toggle bot %d: %v", id, err)
+		if errors.Is(err, store.ErrNotFound) {
+			http.Error(w, "Bot not found", http.StatusNotFound)
+			return
+		}
 		http.Error(w, "Failed to toggle bot", http.StatusInternalServerError)
 		return
 	}
@@ -113,6 +118,10 @@ func (h *AdminHandler) deleteBot(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.store.DeleteBot(id); err != nil {
 		log.Printf("ERROR delete bot %d: %v", id, err)
+		if errors.Is(err, store.ErrNotFound) {
+			http.Error(w, "Bot not found", http.StatusNotFound)
+			return
+		}
 		http.Error(w, "Failed to delete bot", http.StatusInternalServerError)
 		return
 	}

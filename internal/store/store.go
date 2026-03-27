@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -14,6 +15,9 @@ import (
 type Store struct {
 	db *sql.DB
 }
+
+// ErrNotFound is returned when an expected record is missing.
+var ErrNotFound = errors.New("record not found")
 
 // New opens a SQLite database and ensures the schema exists.
 func New(dbPath string) (*Store, error) {
@@ -153,9 +157,16 @@ func (s *Store) GetBot(id int64) (*model.Bot, error) {
 
 // ToggleBot flips the enabled status of a bot.
 func (s *Store) ToggleBot(id int64) error {
-	_, err := s.db.Exec("UPDATE bots SET enabled = NOT enabled WHERE id = ?", id)
+	result, err := s.db.Exec("UPDATE bots SET enabled = NOT enabled WHERE id = ?", id)
 	if err != nil {
 		return fmt.Errorf("toggle bot: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("toggle bot rows affected: %w", err)
+	}
+	if rows == 0 {
+		return ErrNotFound
 	}
 	return nil
 }
@@ -171,8 +182,16 @@ func (s *Store) DeleteBot(id int64) error {
 	if _, err := tx.Exec("DELETE FROM guild_installs WHERE bot_id = ?", id); err != nil {
 		return fmt.Errorf("delete installs: %w", err)
 	}
-	if _, err := tx.Exec("DELETE FROM bots WHERE id = ?", id); err != nil {
+	result, err := tx.Exec("DELETE FROM bots WHERE id = ?", id)
+	if err != nil {
 		return fmt.Errorf("delete bot: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("delete bot rows affected: %w", err)
+	}
+	if rows == 0 {
+		return ErrNotFound
 	}
 	return tx.Commit()
 }

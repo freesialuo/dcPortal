@@ -101,3 +101,22 @@ admin:
 		t.Fatal("Load() should reject default token")
 	}
 }
+
+func TestLoadRejectsInvalidPortOverride(t *testing.T) {
+	dir := testTempDir(t)
+	cfgFile := filepath.Join(dir, "config.yaml")
+
+	content := `
+admin:
+  token: "test-secret-token"
+`
+	if err := os.WriteFile(cfgFile, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("DCPORTAL_PORT", "not-a-number")
+	_, err := Load(cfgFile)
+	if err == nil {
+		t.Fatal("Load() should reject invalid DCPORTAL_PORT")
+	}
+}

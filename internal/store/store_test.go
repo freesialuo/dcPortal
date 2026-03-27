@@ -106,6 +106,18 @@ func TestToggleBot(t *testing.T) {
 	}
 }
 
+func TestToggleBotNotFound(t *testing.T) {
+	s := newTestStore(t)
+
+	err := s.ToggleBot(99999)
+	if err == nil {
+		t.Fatal("expected error for missing bot")
+	}
+	if err != ErrNotFound {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+}
+
 func TestDeleteBot(t *testing.T) {
 	s := newTestStore(t)
 
@@ -127,6 +139,18 @@ func TestDeleteBot(t *testing.T) {
 	installs, _ := s.ListInstallsByBot(bot.ID)
 	if len(installs) != 0 {
 		t.Errorf("expected 0 installs after delete, got %d", len(installs))
+	}
+}
+
+func TestDeleteBotNotFound(t *testing.T) {
+	s := newTestStore(t)
+
+	err := s.DeleteBot(99999)
+	if err == nil {
+		t.Fatal("expected error for missing bot")
+	}
+	if err != ErrNotFound {
+		t.Fatalf("expected ErrNotFound, got %v", err)
 	}
 }
 

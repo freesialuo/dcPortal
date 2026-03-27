@@ -61,7 +61,7 @@ func TestAdminAuthCookie(t *testing.T) {
 	}
 }
 
-func TestAdminAuthQueryParam(t *testing.T) {
+func TestAdminAuthRejectsQueryParam(t *testing.T) {
 	token := "secret-token"
 
 	handler := AdminAuth(token)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -72,20 +72,7 @@ func TestAdminAuthQueryParam(t *testing.T) {
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("query param auth: status = %d, want %d", w.Code, http.StatusOK)
-	}
-
-	// Should set cookie
-	cookies := w.Result().Cookies()
-	found := false
-	for _, c := range cookies {
-		if c.Name == "admin_token" && c.Value == token {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("expected admin_token cookie to be set")
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("query param auth should be rejected: status = %d, want %d", w.Code, http.StatusUnauthorized)
 	}
 }

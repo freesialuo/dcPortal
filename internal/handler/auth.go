@@ -36,7 +36,7 @@ func (h *AuthHandler) index(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/admin", http.StatusSeeOther)
 		return
 	}
-	h.renderLogin(w, r, "")
+	h.renderLogin(w, "", r.URL.Query().Get("next"))
 }
 
 func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request) {
@@ -46,9 +46,10 @@ func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	provided := strings.TrimSpace(r.FormValue("token"))
+	nextPath := r.FormValue("next")
 	if subtle.ConstantTimeCompare([]byte(provided), []byte(h.adminToken)) != 1 {
 		w.WriteHeader(http.StatusUnauthorized)
-		h.renderLogin(w, r, "Invalid ADMIN token")
+		h.renderLogin(w, "Invalid ADMIN token", nextPath)
 		return
 	}
 
@@ -75,11 +76,11 @@ func (h *AuthHandler) logout(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-func (h *AuthHandler) renderLogin(w http.ResponseWriter, r *http.Request, errMsg string) {
+func (h *AuthHandler) renderLogin(w http.ResponseWriter, errMsg, nextRaw string) {
 	data := map[string]any{
 		"Title": "DCPortal Login",
 		"Error": errMsg,
-		"Next":  sanitizeNextPath(r.URL.Query().Get("next")),
+		"Next":  sanitizeNextPath(nextRaw),
 	}
 	if err := h.tmpl.ExecuteTemplate(w, "layout.html", data); err != nil {
 		log.Printf("ERROR render login: %v", err)

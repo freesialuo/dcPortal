@@ -72,6 +72,7 @@ func TestAuthLoginRejectsInvalidToken(t *testing.T) {
 
 	form := url.Values{
 		"token": {"wrong-token"},
+		"next":  {"/portal"},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -83,6 +84,9 @@ func TestAuthLoginRejectsInvalidToken(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "Invalid ADMIN token") {
 		t.Fatalf("body should include invalid token message, got %q", w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "/portal") {
+		t.Fatalf("body should keep next path on invalid token, got %q", w.Body.String())
 	}
 }
 

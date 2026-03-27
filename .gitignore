@@ -1,4 +1,5 @@
 bin/
+/dcportal
 data/
 *.db
 *.db-wal

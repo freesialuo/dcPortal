@@ -86,11 +86,11 @@ func main() {
 
 	// Wrap web routes with token auth middleware (redirect to home login page).
 	authMiddleware := middleware.AdminAuthWithRedirect(cfg.Admin.Token, "/")
-	mux.Handle("/portal", authMiddleware(portalMux))
-	mux.Handle("/install/", authMiddleware(portalMux))
-	mux.Handle("/callback", authMiddleware(portalMux))
-	mux.Handle("/admin", authMiddleware(adminMux))
-	mux.Handle("/admin/", authMiddleware(adminMux))
+	mux.Handle("GET /portal", authMiddleware(portalMux))
+	mux.Handle("GET /install/", authMiddleware(portalMux))
+	mux.Handle("GET /callback", authMiddleware(portalMux))
+	mux.Handle("GET /admin", authMiddleware(adminMux))
+	mux.Handle("POST /admin/", authMiddleware(adminMux))
 
 	// Create server
 	srv := &http.Server{

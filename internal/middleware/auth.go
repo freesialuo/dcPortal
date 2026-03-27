@@ -3,6 +3,7 @@ package middleware
 import (
 	"crypto/subtle"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -11,7 +12,7 @@ import (
 func AdminAuth(token string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if checkToken(r, token) {
+			if HasValidAdminToken(r, token) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -20,7 +21,30 @@ func AdminAuth(token string) func(http.Handler) http.Handler {
 	}
 }
 
-func checkToken(r *http.Request, expected string) bool {
+// AdminAuthWithRedirect checks for a valid admin token and redirects to loginPath when missing.
+// It is intended for browser-based pages.
+func AdminAuthWithRedirect(token, loginPath string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if HasValidAdminToken(r, token) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			target := loginPath
+			if target == "" {
+				target = "/"
+			}
+			nextParam := r.URL.RequestURI()
+			if nextParam != "" && nextParam != "/" {
+				target = target + "?next=" + url.QueryEscape(nextParam)
+			}
+			http.Redirect(w, r, target, http.StatusSeeOther)
+		})
+	}
+}
+
+// HasValidAdminToken checks Authorization Bearer token or admin_token cookie.
+func HasValidAdminToken(r *http.Request, expected string) bool {
 	// Check Authorization header
 	auth := r.Header.Get("Authorization")
 	if strings.HasPrefix(auth, "Bearer ") {

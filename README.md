@@ -1,66 +1,138 @@
 # DCPortal
 
-Discord Bot 授权管理门户 — 通过自定义链接控制私有 Bot 的安装授权，替代 Discord 官方公开链接。
+一个面向私有/半私有 Discord Bot 分发场景的授权门户。
 
-## 功能
+English README: [README.en.md](./README.en.md)
 
-- 管理员通过 Token 认证管理 Bot 列表（添加 / 启用 / 禁用 / 删除）
-- 完整 Discord OAuth2 授权码流程（state 验证 → code 交换 → guild 记录）
-- 仅展示已启用的 Bot 给用户安装
-- 管理页支持已安装服务器刷新（Guild Name / ID / 成员数）
-- 支持撤销 User Install 的 OAuth2 授权、断开连接、断开并拉黑
-- 深色主题 Web UI
+DCPortal 通过“受控安装入口 + 管理后台 + 可审计安装记录 + 黑名单策略”，替代直接公开 Discord OAuth2 安装链接的方式，帮助团队更安全地管理 Bot 的安装与撤销。
 
-## 环境变量
+- 镜像地址：`ghcr.io/freesialuo/dcportal:latest`
+- 主要语言：Go
+- 存储：SQLite
+- 部署方式：二进制、Docker、Docker Compose
 
-| 变量 | 必须 | 默认值 | 说明 |
-|------|------|--------|------|
-| `DCPORTAL_ADMIN_TOKEN` | ✅ | — | 管理员认证 Token |
-| `DCPORTAL_INSTALL_TOKEN` | ✅ | — | 安装页分发 Token（给安装者使用） |
-| `DCPORTAL_PORT` | | `8080` | 监听端口 |
-| `DCPORTAL_BASE_URL` | | `http://localhost:8080` | 公开访问 URL |
-| `DCPORTAL_DB_PATH` | | `./data/dcportal.db` | SQLite 数据库路径 |
+## 为什么使用 DCPortal
 
-## Quick Start
+在很多团队里，Discord Bot 往往并不希望被任何人随意安装。
 
-### 本地运行
+DCPortal 解决了这几个核心问题：
+
+- 不直接暴露官方安装链接，而是由你控制安装入口。
+- 安装页与管理页 token 分离，避免权限混用。
+- 管理员可查看已安装服务器列表并主动执行治理动作。
+- 支持断开、断开并拉黑、撤销 OAuth2 User Install 授权。
+- 支持刷新服务器信息（名称、ID、成员数）用于运营盘点。
+
+## 功能总览
+
+### 访问与认证
+
+- 安装页访问令牌（Install Token）。
+- 管理页访问令牌（Admin Token）。
+- 两类会话 Cookie 独立，不互相覆盖。
+
+### Bot 管理
+
+- 新增 Bot（Name / Client ID / Client Secret / Bot Token / Redirect URI / Scopes / Permissions）。
+- 启用/禁用 Bot（控制是否在安装门户展示）。
+- 删除 Bot（同时清理关联安装记录与黑名单记录）。
+
+### OAuth2 安装流程
+
+- 标准 OAuth2 authorization code flow。
+- `state` 防 CSRF（单次使用，带过期）。
+- 回调完成后记录安装信息。
+
+### 服务器连接治理
+
+- 刷新单条或全部安装记录（Guild Name / Member Count）。
+- 撤销 User Install 授权（Revoke OAuth2 token）。
+- 断开连接（删除记录并尝试让 Bot 退出服务器）。
+- 断开并拉黑（后续安装到同一服务器将被拒绝）。
+
+### 黑名单策略
+
+- 黑名单按 `bot_id + guild_id` 维度生效。
+- 被拉黑服务器再次安装时，会在回调阶段被拦截。
+- 若配置了 Bot Token，系统会尝试让 Bot 立即离开该服务器。
+
+## 页面与路由
+
+| 路由 | 说明 |
+|---|---|
+| `/` | 安装入口登录页（Install Token） |
+| `/portal` | Bot 安装选择页 |
+| `/install/{id}` | 发起某个 Bot 的 OAuth2 安装 |
+| `/callback` | Discord OAuth2 回调 |
+| `/admin/login` | 管理后台登录页（Admin Token） |
+| `/admin` | 管理后台首页 |
+
+## 系统架构（简述）
+
+- `cmd/dcportal/main.go`：程序入口、路由装配、中间件挂载。
+- `internal/handler`：页面与业务流程。
+- `internal/discord`：Discord API 封装（token exchange / revoke / guild fetch / leave guild）。
+- `internal/store`：SQLite 数据访问与迁移。
+- `internal/middleware`：安装/管理鉴权中间件。
+- `web/templates` + `web/static`：前端页面模板与样式。
+
+## 快速开始
+
+### 1) 前置要求
+
+- Go 1.25+
+- 可访问 Discord OAuth2 API
+- 一个 Discord Application（至少配置 OAuth2 Redirect URI）
+
+### 2) 本地运行
 
 ```bash
-# 设置 Token（必须）
-export DCPORTAL_ADMIN_TOKEN="your-secure-token"
-export DCPORTAL_INSTALL_TOKEN="your-install-token"
+# 1) 配置必须的 token
+export DCPORTAL_ADMIN_TOKEN="replace-with-strong-admin-token"
+export DCPORTAL_INSTALL_TOKEN="replace-with-strong-install-token"
 
-# 编辑配置
-vim configs/config.yaml
+# 2) 可选覆盖
+export DCPORTAL_PORT="8080"
+export DCPORTAL_BASE_URL="http://localhost:8080"
+export DCPORTAL_DB_PATH="./data/dcportal.db"
 
-# 运行
+# 3) 运行
 make run
 ```
 
-### Docker
+启动后访问：
+
+- 安装登录页：`http://localhost:8080/`
+- 管理登录页：`http://localhost:8080/admin/login`
+
+### 3) Docker 运行
 
 ```bash
 docker run -d \
+  --name dcportal \
   -p 8080:8080 \
-  -e DCPORTAL_ADMIN_TOKEN="your-secure-token" \
-  -e DCPORTAL_INSTALL_TOKEN="your-install-token" \
+  -e DCPORTAL_ADMIN_TOKEN="replace-with-strong-admin-token" \
+  -e DCPORTAL_INSTALL_TOKEN="replace-with-strong-install-token" \
   -e DCPORTAL_BASE_URL="https://portal.example.com" \
   -v dcportal-data:/app/data \
-  ghcr.io/YOUR_USER/dcportal:latest
+  ghcr.io/freesialuo/dcportal:latest
 ```
 
-### Docker Compose
+### 4) Docker Compose
 
 ```yaml
 services:
   dcportal:
-    image: ghcr.io/YOUR_USER/dcportal:latest
+    image: ghcr.io/freesialuo/dcportal:latest
+    container_name: dcportal
+    restart: unless-stopped
     ports:
       - "8080:8080"
     environment:
-      DCPORTAL_ADMIN_TOKEN: "your-secure-token"
-      DCPORTAL_INSTALL_TOKEN: "your-install-token"
+      DCPORTAL_ADMIN_TOKEN: "replace-with-strong-admin-token"
+      DCPORTAL_INSTALL_TOKEN: "replace-with-strong-install-token"
       DCPORTAL_BASE_URL: "https://portal.example.com"
+      DCPORTAL_DB_PATH: "./data/dcportal.db"
     volumes:
       - dcportal-data:/app/data
 
@@ -68,95 +140,144 @@ volumes:
   dcportal-data:
 ```
 
-## 使用流程
+## 配置说明
 
-1. 部署者访问管理登录页 `http://localhost:8080/admin/login`，输入 `ADMIN token` 进入管理后台。
-2. 在 `http://localhost:8080/admin` 添加/维护 Bot 配置。
-3. 安装者访问默认首页 `http://localhost:8080/`，输入 `INSTALL token` 后进入安装页。
-4. 安装者在 `http://localhost:8080/portal` 点击安装 → Discord OAuth2 授权 → 回调（`/callback`）→ 安装成功。
+DCPortal 同时支持 YAML 配置文件与环境变量覆盖，环境变量优先级更高。
 
-CLI 方式仍支持 Header 认证，例如：
-`curl -H "Authorization: Bearer YOUR_TOKEN" http://localhost:8080/admin`
+### `configs/config.yaml`
 
-## 面板详细使用指南
+```yaml
+server:
+  port: 8080
+  base_url: "http://localhost:8080"
 
-### 1) 首次登录与会话
+admin:
+  token: "change-me-to-a-secure-token"
 
-1. 安装访问登录：打开首页 `/`，输入 `INSTALL token`。
-2. 管理访问登录：打开 `/admin/login`，输入 `ADMIN token`。
-3. 安装会话与管理会话分别使用不同 Cookie，互不影响。
+install:
+  token: "change-me-to-a-secure-token"
 
-### 2) 新增 Bot（Admin 页面）
-
-在 `/admin` 的 `Add Bot` 表单中：
-
-- `Bot Name`：仅用于面板显示。
-- `Client ID`：Discord Application 的 Client ID（必填）。
-- `Client Secret`：Discord Application 的 Client Secret（必填，敏感信息）。
-- `Bot Token`：用于管理页“刷新服务器信息”和“断开时让 Bot 退服”（建议填写）。
-- `Redirect URI`：必须与 Discord Developer Portal 中配置一致，通常为 `{BASE_URL}/callback`。
-- `Permissions`：Discord 权限位整数（十进制）。
-- `Scopes`：常用为 `bot`，如果需要 Slash 命令可用 `bot applications.commands`。
-
-保存后 Bot 默认为 `Enabled`，会出现在 `/portal` 列表。
-
-### 3) 使用官方权限计算器（已接入）
-
-在 `Permissions` 字段下方点击 `Open Official Calculator`：
-
-1. 若 `Client ID` 有值，会跳转到 Discord 官方开发者后台该应用的 `OAuth2 URL Generator`。
-2. 若 `Client ID` 为空，会跳转到 Discord 应用列表页，先选择应用再进入 URL Generator。
-3. 在官方页面勾选所需权限后，复制生成的整数权限值，粘贴回 DCPortal 的 `Permissions` 字段。
-
-说明：官方计算器在 Discord Developer Portal 中运行，需要你已登录 Discord 开发者账号。
-
-### 4) 安装与回调验证
-
-1. 在 `/portal` 点击 `Install Bot`。
-2. Discord 授权成功后会回调 `/callback`。
-3. 成功页面会显示 Bot、Guild 信息；同时安装记录写入 Admin 的 `Install History`。
-
-### 5) Bot 维护操作
-
-- `Enable/Disable`：控制 Bot 是否在 `/portal` 对外可见。
-- `Delete`：删除 Bot 配置和对应安装记录（不可恢复）。
-
-### 6) 已安装服务器管理（Admin 页面）
-
-- `Refresh All Guild Info`：批量刷新服务器名称与成员数（依赖 Bot Token）。
-- `Refresh`：刷新单条安装记录的服务器信息。
-- `Revoke OAuth2`：撤销该次安装保存的用户授权 token。
-- `Disconnect`：删除连接记录，并尝试让 Bot 主动退出该服务器。
-- `Disconnect + Blacklist`：在断开基础上拉黑该服务器，后续若再次安装会被立即拒绝并退出。
-
-### 7) 常见问题排查
-
-- 登录后仍提示未授权：
-  - 检查你输入的 token 类型是否正确（安装页用 `DCPORTAL_INSTALL_TOKEN`，管理页用 `DCPORTAL_ADMIN_TOKEN`）。
-  - 检查浏览器是否禁用了 Cookie。
-- Discord 回调失败：
-  - 核对 `Redirect URI` 与 Discord 应用后台完全一致（包含协议、域名、端口、路径）。
-  - 确认 `BASE_URL` 配置与实际访问地址一致。
-- Bot 没出现在 `/portal`：
-  - 确认该 Bot 状态为 `Enabled`。
-
-## 开发
-
-```bash
-make test        # 运行测试
-make test-cover  # 带覆盖率
-make vet         # 静态检查
-make build       # 编译到 bin/dcportal
+database:
+  path: "./data/dcportal.db"
 ```
 
-## CI/CD
+### 环境变量
 
-- Push 到 `main`：仅运行测试（`vet` + `test`）
-- Push `v*` tag：运行测试并发布 Docker 镜像到 GHCR
-- PR：仅运行测试
+| 变量 | 必需 | 默认值 | 说明 |
+|---|---|---|---|
+| `DCPORTAL_ADMIN_TOKEN` | 是 | 无 | 管理页认证 token |
+| `DCPORTAL_INSTALL_TOKEN` | 是 | 无 | 安装页认证 token |
+| `DCPORTAL_PORT` | 否 | `8080` | 服务端口 |
+| `DCPORTAL_BASE_URL` | 否 | `http://localhost:8080` | 对外访问地址 |
+| `DCPORTAL_DB_PATH` | 否 | `./data/dcportal.db` | SQLite 路径 |
 
-推荐发布流程：
+> `ADMIN_TOKEN` 和 `INSTALL_TOKEN` 不能保留默认占位值，否则程序会拒绝启动。
 
-1. 提交代码并推送到 `main`
-2. 确认 `main` 的 CI 测试通过
-3. 创建并推送版本 tag（如 `v0.1.3`）触发发布
+## 管理后台操作手册
+
+### 1) 新增 Bot
+
+在 `/admin` 的 `Add Bot` 中填写：
+
+- `Bot Name`：展示名。
+- `Client ID`：Discord Application Client ID。
+- `Client Secret`：OAuth2 code exchange 和 revoke 使用。
+- `Bot Token`：用于获取服务器详情与执行退服（建议必填）。
+- `Redirect URI`：必须与 Discord Developer Portal 配置完全一致。
+- `Permissions`：权限位整数。
+- `Scopes`：例如 `bot` 或 `bot applications.commands`。
+
+### 2) 安装治理动作
+
+对于每条安装记录，可执行：
+
+- `Refresh`：刷新该服务器名称与成员数。
+- `Revoke OAuth2`：撤销用户授权 token。
+- `Disconnect`：删除连接记录，并尝试让 Bot 退出服务器。
+- `Disconnect + Blacklist`：断开并拉黑，后续再次安装会被拒绝。
+
+批量动作：
+
+- `Refresh All Guild Info`：刷新全部安装记录。
+
+## 安全建议
+
+- 使用高强度随机 token（Admin/Install 至少 32 位）。
+- 生产环境务必使用 HTTPS 与反向代理（Nginx/Caddy/Traefik）。
+- 对 `/admin` 建议增加 IP 白名单或二次访问控制。
+- 不要把 `Client Secret`、`Bot Token` 提交到仓库。
+- 定期备份 SQLite 数据文件。
+
+## 反向代理建议
+
+确保将真实外部 URL 与 `DCPORTAL_BASE_URL`、Discord 应用中的 Redirect URI 保持一致。
+
+常见失败原因：
+
+- 协议不一致（`http` vs `https`）。
+- 端口不一致。
+- 路径不一致（尤其 `/callback`）。
+
+## 数据与持久化
+
+默认数据库位置：`./data/dcportal.db`
+
+生产部署建议：
+
+- Docker 使用 volume 挂载 `/app/data`。
+- 升级前备份数据库文件。
+- 数据库与应用分盘，避免容器销毁导致数据丢失。
+
+## 开发与测试
+
+```bash
+make test        # go test ./... -v
+make test-cover  # go test ./... -cover
+make vet         # go vet ./...
+make build       # 生成 bin/dcportal
+```
+
+## 发布流程（建议）
+
+1. 在 `main` 分支完成变更并通过测试。
+2. 创建带语义版本号的 tag（例如 `v0.1.5`）。
+3. CI 在 tag 流水线中构建并发布镜像到 GHCR。
+4. 部署端更新镜像版本或使用 `latest`。
+
+## 升级说明
+
+如果你从较旧版本升级到当前版本：
+
+- 程序启动时会自动执行 SQLite 迁移（新增字段/表）。
+- 建议升级前先备份数据库。
+- 升级后在管理页为已有 Bot 补齐 `Bot Token`，否则“刷新服务器信息/退服”会受限。
+
+## 常见问题（FAQ）
+
+### Q1: 登录后仍被重定向到登录页
+
+- 检查 token 是否输错（Admin 与 Install 不通用）。
+- 检查浏览器是否拦截 Cookie。
+
+### Q2: OAuth2 回调失败
+
+- 重点核对 Redirect URI（协议、域名、端口、路径必须完全一致）。
+- 核对 `DCPORTAL_BASE_URL` 是否是用户实际访问地址。
+
+### Q3: 为什么成员数没有刷新
+
+- 对应 Bot 未配置 `Bot Token`。
+- Bot 在目标服务器缺少可见权限或已不在服务器内。
+
+### Q4: 断开后为什么 Bot 还在服务器里
+
+- 常见原因是 `Bot Token` 缺失或失效。
+- 管理页会完成“记录断开”，但退服动作可能失败。
+
+## 许可证
+
+当前仓库未附带 LICENSE 文件。如计划公开发布，建议补充 MIT 或 Apache-2.0 许可证。
+
+## 致谢
+
+如果这个项目帮到了你，欢迎 Star、提 Issue、或提交 PR 一起完善。

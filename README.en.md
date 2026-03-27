@@ -279,7 +279,9 @@ make build
 
 ## License
 
-No LICENSE file is currently included. For open-source release, consider adding MIT or Apache-2.0.
+This project is licensed under `AGPL-3.0-only`. See [LICENSE](./LICENSE).
+
+If you provide a modified version as a network service, AGPL requires making the corresponding source code available to users.
 
 ## Contributing
 

@@ -276,7 +276,9 @@ make build       # 生成 bin/dcportal
 
 ## 许可证
 
-当前仓库未附带 LICENSE 文件。如计划公开发布，建议补充 MIT 或 Apache-2.0 许可证。
+本项目采用 `AGPL-3.0-only` 许可证，详见 [LICENSE](./LICENSE)。
+
+如果你以网络服务方式提供二次开发版本，根据 AGPL 要求，需要向用户提供对应源代码。
 
 ## 致谢
 

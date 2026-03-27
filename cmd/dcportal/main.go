@@ -71,8 +71,10 @@ func main() {
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
 
 	// Home login routes
-	authHandler := handler.NewAuthHandler(loginTmpl, cfg.Admin.Token)
-	authHandler.RegisterRoutes(mux)
+	installAuthHandler := handler.NewAuthHandler(loginTmpl, cfg.Install.Token)
+	installAuthHandler.RegisterRoutes(mux)
+	adminLoginHandler := handler.NewAdminLoginHandler(loginTmpl, cfg.Admin.Token)
+	adminLoginHandler.RegisterRoutes(mux)
 
 	// Protected portal routes (with Discord OAuth2 flow)
 	portalHandler := handler.NewPortalHandler(st, portalTmpl, resultTmpl, dc)
@@ -84,13 +86,16 @@ func main() {
 	adminMux := http.NewServeMux()
 	adminHandler.RegisterRoutes(adminMux)
 
-	// Wrap web routes with token auth middleware (redirect to home login page).
-	authMiddleware := middleware.AdminAuthWithRedirect(cfg.Admin.Token, "/")
-	mux.Handle("GET /portal", authMiddleware(portalMux))
-	mux.Handle("GET /install/", authMiddleware(portalMux))
-	mux.Handle("GET /callback", authMiddleware(portalMux))
-	mux.Handle("GET /admin", authMiddleware(adminMux))
-	mux.Handle("POST /admin/", authMiddleware(adminMux))
+	// Wrap install routes with install-token middleware.
+	installAuthMiddleware := middleware.InstallAuthWithRedirect(cfg.Install.Token, "/")
+	mux.Handle("GET /portal", installAuthMiddleware(portalMux))
+	mux.Handle("GET /install/", installAuthMiddleware(portalMux))
+	mux.Handle("GET /callback", installAuthMiddleware(portalMux))
+
+	// Wrap admin routes with admin-token middleware.
+	adminAuthMiddleware := middleware.AdminAuthWithRedirect(cfg.Admin.Token, "/admin/login")
+	mux.Handle("GET /admin", adminAuthMiddleware(adminMux))
+	mux.Handle("POST /admin/", adminAuthMiddleware(adminMux))
 
 	// Create server
 	srv := &http.Server{

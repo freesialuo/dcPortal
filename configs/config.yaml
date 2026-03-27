@@ -5,5 +5,8 @@ server:
 admin:
   token: "change-me-to-a-secure-token"
 
+install:
+  token: "change-me-to-a-secure-token"
+
 database:
   path: "./data/dcportal.db"

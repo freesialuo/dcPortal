@@ -15,6 +15,7 @@ Discord Bot 授权管理门户 — 通过自定义链接控制私有 Bot 的安�
 | 变量 | 必须 | 默认值 | 说明 |
 |------|------|--------|------|
 | `DCPORTAL_ADMIN_TOKEN` | ✅ | — | 管理员认证 Token |
+| `DCPORTAL_INSTALL_TOKEN` | ✅ | — | 安装页分发 Token（给安装者使用） |
 | `DCPORTAL_PORT` | | `8080` | 监听端口 |
 | `DCPORTAL_BASE_URL` | | `http://localhost:8080` | 公开访问 URL |
 | `DCPORTAL_DB_PATH` | | `./data/dcportal.db` | SQLite 数据库路径 |
@@ -24,8 +25,9 @@ Discord Bot 授权管理门户 — 通过自定义链接控制私有 Bot 的安�
 ### 本地运行
 
 ```bash
-# 设置 Admin Token（必须）
+# 设置 Token（必须）
 export DCPORTAL_ADMIN_TOKEN="your-secure-token"
+export DCPORTAL_INSTALL_TOKEN="your-install-token"
 
 # 编辑配置
 vim configs/config.yaml
@@ -40,6 +42,7 @@ make run
 docker run -d \
   -p 8080:8080 \
   -e DCPORTAL_ADMIN_TOKEN="your-secure-token" \
+  -e DCPORTAL_INSTALL_TOKEN="your-install-token" \
   -e DCPORTAL_BASE_URL="https://portal.example.com" \
   -v dcportal-data:/app/data \
   ghcr.io/YOUR_USER/dcportal:latest
@@ -55,6 +58,7 @@ services:
       - "8080:8080"
     environment:
       DCPORTAL_ADMIN_TOKEN: "your-secure-token"
+      DCPORTAL_INSTALL_TOKEN: "your-install-token"
       DCPORTAL_BASE_URL: "https://portal.example.com"
     volumes:
       - dcportal-data:/app/data
@@ -65,10 +69,10 @@ volumes:
 
 ## 使用流程
 
-1. 浏览器访问 `http://localhost:8080/`，先输入 `ADMIN token` 完成登录。
-2. 登录后访问管理页 `http://localhost:8080/admin` 添加 Bot：填写 Name、Client ID、Client Secret、Redirect URI（设为 `{BASE_URL}/callback`）、Permissions、Scopes。
-3. 登录后访问安装页 `http://localhost:8080/portal` 查看可安装 Bot。
-4. 点击安装 → Discord OAuth2 授权 → 回调（`/callback`）→ 安装成功。
+1. 部署者访问管理登录页 `http://localhost:8080/admin/login`，输入 `ADMIN token` 进入管理后台。
+2. 在 `http://localhost:8080/admin` 添加/维护 Bot 配置。
+3. 安装者访问默认首页 `http://localhost:8080/`，输入 `INSTALL token` 后进入安装页。
+4. 安装者在 `http://localhost:8080/portal` 点击安装 → Discord OAuth2 授权 → 回调（`/callback`）→ 安装成功。
 
 CLI 方式仍支持 Header 认证，例如：
 `curl -H "Authorization: Bearer YOUR_TOKEN" http://localhost:8080/admin`
@@ -77,9 +81,9 @@ CLI 方式仍支持 Header 认证，例如：
 
 ### 1) 首次登录与会话
 
-1. 打开首页 `/`，输入 `ADMIN token` 登录。
-2. 登录成功后会写入 `admin_token` Cookie，用于后续页面访问鉴权。
-3. 点击页面底部 `Logout` 可立即清除会话。
+1. 安装访问登录：打开首页 `/`，输入 `INSTALL token`。
+2. 管理访问登录：打开 `/admin/login`，输入 `ADMIN token`。
+3. 安装会话与管理会话分别使用不同 Cookie，互不影响。
 
 ### 2) 新增 Bot（Admin 页面）
 
@@ -118,7 +122,7 @@ CLI 方式仍支持 Header 认证，例如：
 ### 6) 常见问题排查
 
 - 登录后仍提示未授权：
-  - 检查 `DCPORTAL_ADMIN_TOKEN` 是否与输入值一致。
+  - 检查你输入的 token 类型是否正确（安装页用 `DCPORTAL_INSTALL_TOKEN`，管理页用 `DCPORTAL_ADMIN_TOKEN`）。
   - 检查浏览器是否禁用了 Cookie。
 - Discord 回调失败：
   - 核对 `Redirect URI` 与 Discord 应用后台完全一致（包含协议、域名、端口、路径）。

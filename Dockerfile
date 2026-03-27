@@ -37,6 +37,7 @@ EXPOSE 8080
 # DCPORTAL_PORT          - Server port (default: 8080)
 # DCPORTAL_BASE_URL      - Public base URL (e.g. https://portal.example.com)
 # DCPORTAL_ADMIN_TOKEN   - Admin authentication token (REQUIRED)
+# DCPORTAL_INSTALL_TOKEN - Install portal token for distributed access (REQUIRED)
 # DCPORTAL_DB_PATH       - SQLite database path (default: ./data/dcportal.db)
 
 ENTRYPOINT ["/app/dcportal"]

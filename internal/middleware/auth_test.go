@@ -110,3 +110,44 @@ func TestAdminAuthWithRedirectAllowsValidToken(t *testing.T) {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
 	}
 }
+
+func TestInstallAuthWithRedirect(t *testing.T) {
+	token := "install-token"
+	handler := InstallAuthWithRedirect(token, "/")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/portal", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusSeeOther)
+	}
+	if got := w.Header().Get("Location"); got != "/?next=%2Fportal" {
+		t.Fatalf("Location = %q, want /?next=%%2Fportal", got)
+	}
+}
+
+func TestInstallAuthAllowsInstallCookieOnly(t *testing.T) {
+	token := "install-token"
+	handler := InstallAuthWithRedirect(token, "/")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/portal", nil)
+	req.AddCookie(&http.Cookie{Name: "install_token", Value: token})
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	req = httptest.NewRequest("GET", "/portal", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("install auth should reject bearer-only auth: status = %d, want %d", w.Code, http.StatusSeeOther)
+	}
+}

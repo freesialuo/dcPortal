@@ -45,17 +45,55 @@ func AdminAuthWithRedirect(token, loginPath string) func(http.Handler) http.Hand
 
 // HasValidAdminToken checks Authorization Bearer token or admin_token cookie.
 func HasValidAdminToken(r *http.Request, expected string) bool {
+	return hasValidToken(r, expected, "admin_token", true)
+}
+
+// InstallAuthWithRedirect checks for a valid install token and redirects to loginPath when missing.
+func InstallAuthWithRedirect(token, loginPath string) func(http.Handler) http.Handler {
+	return authWithRedirect(func(r *http.Request) bool {
+		return HasValidInstallToken(r, token)
+	}, loginPath)
+}
+
+// HasValidInstallToken checks install_token cookie.
+func HasValidInstallToken(r *http.Request, expected string) bool {
+	return hasValidToken(r, expected, "install_token", false)
+}
+
+func authWithRedirect(check func(*http.Request) bool, loginPath string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if check(r) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			target := loginPath
+			if target == "" {
+				target = "/"
+			}
+			nextParam := r.URL.RequestURI()
+			if nextParam != "" && nextParam != "/" {
+				target = target + "?next=" + url.QueryEscape(nextParam)
+			}
+			http.Redirect(w, r, target, http.StatusSeeOther)
+		})
+	}
+}
+
+func hasValidToken(r *http.Request, expected, cookieName string, allowBearer bool) bool {
 	// Check Authorization header
-	auth := r.Header.Get("Authorization")
-	if strings.HasPrefix(auth, "Bearer ") {
-		provided := strings.TrimPrefix(auth, "Bearer ")
-		if subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) == 1 {
-			return true
+	if allowBearer {
+		auth := r.Header.Get("Authorization")
+		if strings.HasPrefix(auth, "Bearer ") {
+			provided := strings.TrimPrefix(auth, "Bearer ")
+			if subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) == 1 {
+				return true
+			}
 		}
 	}
 
 	// Check cookie
-	cookie, err := r.Cookie("admin_token")
+	cookie, err := r.Cookie(cookieName)
 	if err == nil && subtle.ConstantTimeCompare([]byte(cookie.Value), []byte(expected)) == 1 {
 		return true
 	}

@@ -12,6 +12,7 @@ import (
 type Config struct {
 	Server   ServerConfig   `yaml:"server"`
 	Admin    AdminConfig    `yaml:"admin"`
+	Install  InstallConfig  `yaml:"install"`
 	Database DatabaseConfig `yaml:"database"`
 }
 
@@ -21,6 +22,10 @@ type ServerConfig struct {
 }
 
 type AdminConfig struct {
+	Token string `yaml:"token"`
+}
+
+type InstallConfig struct {
 	Token string `yaml:"token"`
 }
 
@@ -58,12 +63,18 @@ func Load(path string) (*Config, error) {
 	if v := os.Getenv("DCPORTAL_ADMIN_TOKEN"); v != "" {
 		cfg.Admin.Token = v
 	}
+	if v := os.Getenv("DCPORTAL_INSTALL_TOKEN"); v != "" {
+		cfg.Install.Token = v
+	}
 	if v := os.Getenv("DCPORTAL_DB_PATH"); v != "" {
 		cfg.Database.Path = v
 	}
 
 	if cfg.Admin.Token == "" || cfg.Admin.Token == "change-me-to-a-secure-token" {
 		return nil, fmt.Errorf("admin token must be set to a secure value (set DCPORTAL_ADMIN_TOKEN env var or update config)")
+	}
+	if cfg.Install.Token == "" || cfg.Install.Token == "change-me-to-a-secure-token" {
+		return nil, fmt.Errorf("install token must be set to a secure value (set DCPORTAL_INSTALL_TOKEN env var or update config)")
 	}
 
 	return cfg, nil

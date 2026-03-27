@@ -1,18 +1,18 @@
 {{define "content"}}
 <header>
     <h1>DCPortal</h1>
-    <p class="subtitle">Enter ADMIN token to continue</p>
+    <p class="subtitle">{{.Subtitle}}</p>
 </header>
 
 <section class="card auth-card">
-    <h2>Admin Login</h2>
+    <h2>{{.Heading}}</h2>
     {{if .Error}}
     <p class="error-message">{{.Error}}</p>
     {{end}}
-    <form method="POST" action="/login">
+    <form method="POST" action="{{.FormAction}}">
         <input type="hidden" name="next" value="{{.Next}}">
         <div class="form-group">
-            <label for="token">ADMIN Token</label>
+            <label for="token">{{.TokenLabel}}</label>
             <input type="password" id="token" name="token" placeholder="Enter token" required autofocus>
         </div>
         <button type="submit" class="btn btn-primary">Continue</button>

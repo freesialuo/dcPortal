@@ -16,7 +16,7 @@ func setupAuthHandler(t *testing.T) *AuthHandler {
 	return NewAuthHandler(tmpl, "secret-token")
 }
 
-func TestAuthIndexRequiresLogin(t *testing.T) {
+func TestAuthIndexRequiresInstallLogin(t *testing.T) {
 	h := setupAuthHandler(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -28,23 +28,23 @@ func TestAuthIndexRequiresLogin(t *testing.T) {
 	}
 }
 
-func TestAuthIndexRedirectWhenTokenPresent(t *testing.T) {
+func TestAuthIndexRedirectWhenInstallTokenPresent(t *testing.T) {
 	h := setupAuthHandler(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.AddCookie(&http.Cookie{Name: "admin_token", Value: "secret-token"})
+	req.AddCookie(&http.Cookie{Name: "install_token", Value: "secret-token"})
 	w := httptest.NewRecorder()
 	h.index(w, req)
 
 	if w.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusSeeOther)
 	}
-	if got := w.Header().Get("Location"); got != "/admin" {
-		t.Fatalf("Location = %q, want /admin", got)
+	if got := w.Header().Get("Location"); got != "/portal" {
+		t.Fatalf("Location = %q, want /portal", got)
 	}
 }
 
-func TestAuthLoginSuccessSetsCookieAndRedirects(t *testing.T) {
+func TestAuthLoginSuccessSetsInstallCookieAndRedirects(t *testing.T) {
 	h := setupAuthHandler(t)
 
 	form := url.Values{
@@ -62,12 +62,12 @@ func TestAuthLoginSuccessSetsCookieAndRedirects(t *testing.T) {
 	if got := w.Header().Get("Location"); got != "/portal" {
 		t.Fatalf("Location = %q, want /portal", got)
 	}
-	if !strings.Contains(w.Header().Get("Set-Cookie"), "admin_token=") {
-		t.Fatalf("Set-Cookie should contain admin_token, got %q", w.Header().Get("Set-Cookie"))
+	if !strings.Contains(w.Header().Get("Set-Cookie"), "install_token=") {
+		t.Fatalf("Set-Cookie should contain install_token, got %q", w.Header().Get("Set-Cookie"))
 	}
 }
 
-func TestAuthLoginRejectsInvalidToken(t *testing.T) {
+func TestAuthLoginRejectsInvalidInstallToken(t *testing.T) {
 	h := setupAuthHandler(t)
 
 	form := url.Values{
@@ -82,7 +82,7 @@ func TestAuthLoginRejectsInvalidToken(t *testing.T) {
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusUnauthorized)
 	}
-	if !strings.Contains(w.Body.String(), "Invalid ADMIN token") {
+	if !strings.Contains(w.Body.String(), "Invalid install token") {
 		t.Fatalf("body should include invalid token message, got %q", w.Body.String())
 	}
 	if !strings.Contains(w.Body.String(), "/portal") {
@@ -90,7 +90,7 @@ func TestAuthLoginRejectsInvalidToken(t *testing.T) {
 	}
 }
 
-func TestAuthLogoutClearsCookie(t *testing.T) {
+func TestAuthLogoutClearsInstallCookie(t *testing.T) {
 	h := setupAuthHandler(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/logout", nil)
@@ -105,18 +105,18 @@ func TestAuthLogoutClearsCookie(t *testing.T) {
 	}
 	if !strings.Contains(w.Header().Get("Set-Cookie"), "Max-Age=0") &&
 		!strings.Contains(w.Header().Get("Set-Cookie"), "Max-Age=-1") {
-		t.Fatalf("Set-Cookie should clear admin_token, got %q", w.Header().Get("Set-Cookie"))
+		t.Fatalf("Set-Cookie should clear install_token, got %q", w.Header().Get("Set-Cookie"))
 	}
 }
 
 func TestSanitizeNextPath(t *testing.T) {
-	if got := sanitizeNextPath("https://evil.com"); got != "/admin" {
-		t.Fatalf("sanitize external = %q, want /admin", got)
+	if got := sanitizeNextPath("https://evil.com", "/portal"); got != "/portal" {
+		t.Fatalf("sanitize external = %q, want /portal", got)
 	}
-	if got := sanitizeNextPath("//evil"); got != "/admin" {
-		t.Fatalf("sanitize protocol-relative = %q, want /admin", got)
+	if got := sanitizeNextPath("//evil", "/portal"); got != "/portal" {
+		t.Fatalf("sanitize protocol-relative = %q, want /portal", got)
 	}
-	if got := sanitizeNextPath("/portal"); got != "/portal" {
+	if got := sanitizeNextPath("/portal", "/admin"); got != "/portal" {
 		t.Fatalf("sanitize local path = %q, want /portal", got)
 	}
 }

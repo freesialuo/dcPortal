@@ -25,6 +25,8 @@ server:
   port: 9090
 admin:
   token: "test-secret-token"
+install:
+  token: "install-secret-token"
 database:
   path: "./test.db"
 `
@@ -43,6 +45,9 @@ database:
 	if cfg.Admin.Token != "test-secret-token" {
 		t.Errorf("Token = %q, want %q", cfg.Admin.Token, "test-secret-token")
 	}
+	if cfg.Install.Token != "install-secret-token" {
+		t.Errorf("Install.Token = %q, want %q", cfg.Install.Token, "install-secret-token")
+	}
 	if cfg.Database.Path != "./test.db" {
 		t.Errorf("Path = %q, want %q", cfg.Database.Path, "./test.db")
 	}
@@ -57,6 +62,8 @@ server:
   port: 8080
 admin:
   token: "original-token"
+install:
+  token: "original-install-token"
 database:
   path: "./data.db"
 `
@@ -66,6 +73,7 @@ database:
 
 	t.Setenv("DCPORTAL_PORT", "3000")
 	t.Setenv("DCPORTAL_ADMIN_TOKEN", "env-token")
+	t.Setenv("DCPORTAL_INSTALL_TOKEN", "env-install-token")
 	t.Setenv("DCPORTAL_DB_PATH", "/tmp/override.db")
 
 	cfg, err := Load(cfgFile)
@@ -79,6 +87,9 @@ database:
 	if cfg.Admin.Token != "env-token" {
 		t.Errorf("Token = %q, want %q", cfg.Admin.Token, "env-token")
 	}
+	if cfg.Install.Token != "env-install-token" {
+		t.Errorf("Install.Token = %q, want %q", cfg.Install.Token, "env-install-token")
+	}
 	if cfg.Database.Path != "/tmp/override.db" {
 		t.Errorf("Path = %q, want %q", cfg.Database.Path, "/tmp/override.db")
 	}
@@ -91,6 +102,8 @@ func TestLoadRejectsDefaultToken(t *testing.T) {
 	content := `
 admin:
   token: "change-me-to-a-secure-token"
+install:
+  token: "install-secret-token"
 `
 	if err := os.WriteFile(cfgFile, []byte(content), 0644); err != nil {
 		t.Fatal(err)
@@ -102,6 +115,26 @@ admin:
 	}
 }
 
+func TestLoadRejectsDefaultInstallToken(t *testing.T) {
+	dir := testTempDir(t)
+	cfgFile := filepath.Join(dir, "config.yaml")
+
+	content := `
+admin:
+  token: "admin-secret-token"
+install:
+  token: "change-me-to-a-secure-token"
+`
+	if err := os.WriteFile(cfgFile, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := Load(cfgFile)
+	if err == nil {
+		t.Fatal("Load() should reject default install token")
+	}
+}
+
 func TestLoadRejectsInvalidPortOverride(t *testing.T) {
 	dir := testTempDir(t)
 	cfgFile := filepath.Join(dir, "config.yaml")
@@ -109,6 +142,8 @@ func TestLoadRejectsInvalidPortOverride(t *testing.T) {
 	content := `
 admin:
   token: "test-secret-token"
+install:
+  token: "install-secret-token"
 `
 	if err := os.WriteFile(cfgFile, []byte(content), 0644); err != nil {
 		t.Fatal(err)

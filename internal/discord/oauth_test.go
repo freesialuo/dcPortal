@@ -110,3 +110,50 @@ func TestRevokeToken(t *testing.T) {
 		t.Fatalf("RevokeToken: %v", err)
 	}
 }
+
+func TestGetGuild(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/guilds/123" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("with_counts") != "true" {
+			t.Errorf("with_counts = %q", r.URL.Query().Get("with_counts"))
+		}
+		if r.Header.Get("Authorization") != "Bot bot-token" {
+			t.Errorf("Authorization = %q", r.Header.Get("Authorization"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"id":"123","name":"Guild A","approximate_member_count":42}`))
+	}))
+	defer server.Close()
+
+	client := NewClientWithBase(server.URL, server.Client())
+	guild, err := client.GetGuild("bot-token", "123")
+	if err != nil {
+		t.Fatalf("GetGuild: %v", err)
+	}
+	if guild.Name != "Guild A" || guild.ApproximateMemberCount != 42 {
+		t.Fatalf("unexpected guild: %+v", guild)
+	}
+}
+
+func TestLeaveGuild(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/users/@me/guilds/123" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		if r.Method != http.MethodDelete {
+			t.Errorf("method = %s", r.Method)
+		}
+		if r.Header.Get("Authorization") != "Bot bot-token" {
+			t.Errorf("Authorization = %q", r.Header.Get("Authorization"))
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	client := NewClientWithBase(server.URL, server.Client())
+	if err := client.LeaveGuild("bot-token", "123"); err != nil {
+		t.Fatalf("LeaveGuild: %v", err)
+	}
+}

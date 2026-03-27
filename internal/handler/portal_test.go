@@ -334,3 +334,57 @@ func TestPortalCallbackIgnoresUnverifiedGuildID(t *testing.T) {
 		t.Fatalf("expected 0 installs when guild is not returned by Discord, got %d", len(installs))
 	}
 }
+
+func TestPortalCallbackBlockedGuild(t *testing.T) {
+	s := newTestStore2(t)
+	dc, _ := newMockDiscord(t)
+
+	bot := &model.Bot{
+		Name:         "Bot1",
+		ClientID:     "123456",
+		ClientSecret: "secret",
+		Scopes:       "bot",
+		RedirectURI:  "http://localhost:8080/callback",
+		Enabled:      true,
+	}
+	if err := s.CreateBot(bot); err != nil {
+		t.Fatalf("CreateBot: %v", err)
+	}
+	if err := s.AddGuildBlacklist(bot.ID, "guild-999", "Mock Guild"); err != nil {
+		t.Fatalf("AddGuildBlacklist: %v", err)
+	}
+
+	h := NewPortalHandler(s, testPortalTmpl(), testResultTmpl(), dc)
+
+	origGenState := generateState
+	generateState = func() (string, error) { return "blocked-state", nil }
+	t.Cleanup(func() { generateState = origGenState })
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("GET", "/install/1", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("install redirect status = %d", w.Code)
+	}
+
+	req = httptest.NewRequest("GET", "/callback?code=auth-code-123&state=blocked-state", nil)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("callback status = %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "false") {
+		t.Fatalf("expected failed result page body, got: %s", w.Body.String())
+	}
+
+	installs, err := s.ListInstalls()
+	if err != nil {
+		t.Fatalf("ListInstalls: %v", err)
+	}
+	if len(installs) != 0 {
+		t.Fatalf("expected 0 installs for blocked guild, got %d", len(installs))
+	}
+}

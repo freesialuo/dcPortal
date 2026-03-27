@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"dcportal/internal/discord"
 	"dcportal/internal/store"
 )
 
@@ -23,7 +24,8 @@ func setupAdminTest(t *testing.T) (*AdminHandler, *store.Store) {
 	tmpl = template.Must(tmpl.New("admin.html").Parse(
 		`{{define "content"}}{{range .Bots}}{{.Name}},{{end}}{{end}}`))
 
-	h := NewAdminHandler(s, tmpl)
+	dc := discord.NewClientWithBase("http://127.0.0.1", http.DefaultClient)
+	h := NewAdminHandler(s, tmpl, dc)
 	return h, s
 }
 

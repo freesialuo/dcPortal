@@ -14,6 +14,7 @@ type Bot struct {
 	Name         string    `json:"name"`
 	ClientID     string    `json:"client_id"`
 	ClientSecret string    `json:"client_secret"`
+	BotToken     string    `json:"bot_token"`
 	Permissions  string    `json:"permissions"`
 	Scopes       string    `json:"scopes"`
 	RedirectURI  string    `json:"redirect_uri"`

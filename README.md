@@ -7,7 +7,8 @@ Discord Bot 授权管理门户 — 通过自定义链接控制私有 Bot 的安�
 - 管理员通过 Token 认证管理 Bot 列表（添加 / 启用 / 禁用 / 删除）
 - 完整 Discord OAuth2 授权码流程（state 验证 → code 交换 → guild 记录）
 - 仅展示已启用的 Bot 给用户安装
-- 安装记录跟踪（Guild ID / Name / 时间）
+- 管理页支持已安装服务器刷新（Guild Name / ID / 成员数）
+- 支持撤销 User Install 的 OAuth2 授权、断开连接、断开并拉黑
 - 深色主题 Web UI
 
 ## 环境变量
@@ -92,6 +93,7 @@ CLI 方式仍支持 Header 认证，例如：
 - `Bot Name`：仅用于面板显示。
 - `Client ID`：Discord Application 的 Client ID（必填）。
 - `Client Secret`：Discord Application 的 Client Secret（必填，敏感信息）。
+- `Bot Token`：用于管理页“刷新服务器信息”和“断开时让 Bot 退服”（建议填写）。
 - `Redirect URI`：必须与 Discord Developer Portal 中配置一致，通常为 `{BASE_URL}/callback`。
 - `Permissions`：Discord 权限位整数（十进制）。
 - `Scopes`：常用为 `bot`，如果需要 Slash 命令可用 `bot applications.commands`。
@@ -119,7 +121,15 @@ CLI 方式仍支持 Header 认证，例如：
 - `Enable/Disable`：控制 Bot 是否在 `/portal` 对外可见。
 - `Delete`：删除 Bot 配置和对应安装记录（不可恢复）。
 
-### 6) 常见问题排查
+### 6) 已安装服务器管理（Admin 页面）
+
+- `Refresh All Guild Info`：批量刷新服务器名称与成员数（依赖 Bot Token）。
+- `Refresh`：刷新单条安装记录的服务器信息。
+- `Revoke OAuth2`：撤销该次安装保存的用户授权 token。
+- `Disconnect`：删除连接记录，并尝试让 Bot 主动退出该服务器。
+- `Disconnect + Blacklist`：在断开基础上拉黑该服务器，后续若再次安装会被立即拒绝并退出。
+
+### 7) 常见问题排查
 
 - 登录后仍提示未授权：
   - 检查你输入的 token 类型是否正确（安装页用 `DCPORTAL_INSTALL_TOKEN`，管理页用 `DCPORTAL_ADMIN_TOKEN`）。

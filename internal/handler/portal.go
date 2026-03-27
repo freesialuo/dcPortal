@@ -157,11 +157,44 @@ func (h *PortalHandler) callback(w http.ResponseWriter, r *http.Request) {
 	// Determine guild info
 	guildID := ""
 	guildName := ""
+	memberCount := 0
 	if tokenResp.Guild != nil {
 		guildID = tokenResp.Guild.ID
 		guildName = tokenResp.Guild.Name
 		if guildID != "" {
-			if _, err := h.store.RecordInstall(entry.BotID, guildID, guildName); err != nil {
+			isBlocked, err := h.store.IsGuildBlacklisted(entry.BotID, guildID)
+			if err != nil {
+				log.Printf("ERROR check blacklist: %v", err)
+			}
+			if isBlocked {
+				log.Printf("WARN blocked guild install attempt bot=%d guild=%s", entry.BotID, guildID)
+				if bot.BotToken != "" {
+					go func() {
+						if err := h.discordClient.LeaveGuild(bot.BotToken, guildID); err != nil {
+							log.Printf("WARN leave blocked guild: %v", err)
+						}
+					}()
+				}
+				if tokenResp.AccessToken != "" {
+					go func() {
+						if err := h.discordClient.RevokeToken(bot.ClientID, bot.ClientSecret, tokenResp.AccessToken); err != nil {
+							log.Printf("WARN revoke token: %v", err)
+						}
+					}()
+				}
+				h.renderResult(w, false, "This server has been blocked by admin and cannot install this bot.", bot.Name, guildName, guildID)
+				return
+			}
+			if bot.BotToken != "" {
+				guild, err := h.discordClient.GetGuild(bot.BotToken, guildID)
+				if err != nil {
+					log.Printf("WARN refresh guild details on callback: %v", err)
+				} else {
+					guildName = guild.Name
+					memberCount = guild.ApproximateMemberCount
+				}
+			}
+			if _, err := h.store.RecordInstall(entry.BotID, guildID, guildName, memberCount, tokenResp.AccessToken, tokenResp.RefreshToken); err != nil {
 				log.Printf("ERROR record install: %v", err)
 			}
 		} else {
@@ -169,15 +202,6 @@ func (h *PortalHandler) callback(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		log.Printf("WARN token response missing guild info for bot %d", entry.BotID)
-	}
-
-	// Revoke the access token (we don't need it — we only needed the bot authorization)
-	if tokenResp.AccessToken != "" {
-		go func() {
-			if err := h.discordClient.RevokeToken(bot.ClientID, bot.ClientSecret, tokenResp.AccessToken); err != nil {
-				log.Printf("WARN revoke token: %v", err)
-			}
-		}()
 	}
 
 	h.renderResult(w, true, "Bot has been authorized successfully!", bot.Name, guildName, guildID)

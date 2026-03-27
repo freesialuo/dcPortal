@@ -30,6 +30,13 @@ type GuildResponse struct {
 	Icon string `json:"icon"`
 }
 
+// GuildDetail is guild metadata from Discord API.
+type GuildDetail struct {
+	ID                     string `json:"id"`
+	Name                   string `json:"name"`
+	ApproximateMemberCount int    `json:"approximate_member_count"`
+}
+
 // Client interacts with the Discord API.
 type Client struct {
 	httpClient *http.Client
@@ -117,5 +124,55 @@ func (c *Client) RevokeToken(clientID, clientSecret, token string) error {
 		return fmt.Errorf("revoke failed (status %d): %s", resp.StatusCode, string(body))
 	}
 
+	return nil
+}
+
+// GetGuild fetches guild details using a bot token.
+func (c *Client) GetGuild(botToken, guildID string) (*GuildDetail, error) {
+	req, err := http.NewRequest("GET", c.apiBase+"/guilds/"+guildID+"?with_counts=true", nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bot "+botToken)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("get guild request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("get guild failed (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	var guild GuildDetail
+	if err := json.Unmarshal(body, &guild); err != nil {
+		return nil, fmt.Errorf("parse guild response: %w", err)
+	}
+	return &guild, nil
+}
+
+// LeaveGuild makes the bot leave a guild.
+func (c *Client) LeaveGuild(botToken, guildID string) error {
+	req, err := http.NewRequest("DELETE", c.apiBase+"/users/@me/guilds/"+guildID, nil)
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bot "+botToken)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("leave guild request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("leave guild failed (status %d): %s", resp.StatusCode, string(body))
+	}
 	return nil
 }

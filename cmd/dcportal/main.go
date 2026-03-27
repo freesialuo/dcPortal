@@ -82,7 +82,7 @@ func main() {
 	portalHandler.RegisterRoutes(portalMux)
 
 	// Admin routes (protected)
-	adminHandler := handler.NewAdminHandler(st, adminTmpl)
+	adminHandler := handler.NewAdminHandler(st, adminTmpl, dc)
 	adminMux := http.NewServeMux()
 	adminHandler.RegisterRoutes(adminMux)
 

@@ -125,7 +125,7 @@ func TestDeleteBot(t *testing.T) {
 	s.CreateBot(bot)
 
 	// Add an install record to verify cascade delete
-	s.RecordInstall(bot.ID, "guild-1", "Test Guild")
+	s.RecordInstall(bot.ID, "guild-1", "Test Guild", 0, "", "")
 
 	if err := s.DeleteBot(bot.ID); err != nil {
 		t.Fatalf("DeleteBot: %v", err)
@@ -180,16 +180,19 @@ func TestRecordAndListInstalls(t *testing.T) {
 	bot := testBot("Bot1", "111")
 	s.CreateBot(bot)
 
-	gi, err := s.RecordInstall(bot.ID, "guild-123", "My Server")
+	gi, err := s.RecordInstall(bot.ID, "guild-123", "My Server", 123, "access-1", "refresh-1")
 	if err != nil {
 		t.Fatalf("RecordInstall: %v", err)
 	}
 	if gi.GuildID != "guild-123" {
 		t.Errorf("GuildID = %q", gi.GuildID)
 	}
+	if gi.MemberCount != 123 {
+		t.Errorf("MemberCount = %d", gi.MemberCount)
+	}
 
 	// Add another install
-	s.RecordInstall(bot.ID, "guild-456", "Other Server")
+	s.RecordInstall(bot.ID, "guild-456", "Other Server", 456, "", "")
 
 	installs, err := s.ListInstalls()
 	if err != nil {
@@ -215,5 +218,43 @@ func TestRecordAndListInstalls(t *testing.T) {
 	byBot, _ := s.ListInstallsByBot(bot.ID)
 	if len(byBot) != 2 {
 		t.Errorf("expected 2 installs for bot, got %d", len(byBot))
+	}
+}
+
+func TestGuildBlacklist(t *testing.T) {
+	s := newTestStore(t)
+
+	bot := testBot("Bot1", "111")
+	s.CreateBot(bot)
+
+	blocked, err := s.IsGuildBlacklisted(bot.ID, "guild-123")
+	if err != nil {
+		t.Fatalf("IsGuildBlacklisted: %v", err)
+	}
+	if blocked {
+		t.Fatal("guild should not be blocked initially")
+	}
+
+	if err := s.AddGuildBlacklist(bot.ID, "guild-123", "My Server"); err != nil {
+		t.Fatalf("AddGuildBlacklist: %v", err)
+	}
+
+	blocked, err = s.IsGuildBlacklisted(bot.ID, "guild-123")
+	if err != nil {
+		t.Fatalf("IsGuildBlacklisted after insert: %v", err)
+	}
+	if !blocked {
+		t.Fatal("guild should be blocked")
+	}
+
+	list, err := s.ListGuildBlacklist()
+	if err != nil {
+		t.Fatalf("ListGuildBlacklist: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("expected 1 blacklist record, got %d", len(list))
+	}
+	if list[0].GuildID != "guild-123" {
+		t.Errorf("GuildID = %q", list[0].GuildID)
 	}
 }

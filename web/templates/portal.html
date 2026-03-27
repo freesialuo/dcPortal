@@ -1,0 +1,22 @@
+{{define "content"}}
+<header>
+    <h1>🤖 DCPortal</h1>
+    <p class="subtitle">Authorized Bot Installation</p>
+</header>
+
+{{if .Bots}}
+<div class="bot-grid">
+    {{range .Bots}}
+    <div class="card bot-card">
+        <h3>{{.Name}}</h3>
+        <p class="muted">Scopes: {{.Scopes}}</p>
+        <a href="/install/{{.ID}}" class="btn btn-primary">Install Bot</a>
+    </div>
+    {{end}}
+</div>
+{{else}}
+<div class="card">
+    <p class="muted">No bots available for installation.</p>
+</div>
+{{end}}
+{{end}}

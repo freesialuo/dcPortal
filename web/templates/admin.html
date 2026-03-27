@@ -1,0 +1,113 @@
+{{define "content"}}
+<header>
+    <h1>🤖 DCPortal Admin</h1>
+    <p class="subtitle">Manage your Discord bots</p>
+</header>
+
+<section class="card">
+    <h2>Add Bot</h2>
+    <form method="POST" action="/admin/bots" class="form-grid">
+        <div class="form-group">
+            <label for="name">Bot Name</label>
+            <input type="text" id="name" name="name" placeholder="My Bot" required>
+        </div>
+        <div class="form-group">
+            <label for="client_id">Client ID</label>
+            <input type="text" id="client_id" name="client_id" placeholder="123456789012345678" required>
+        </div>
+        <div class="form-group">
+            <label for="client_secret">Client Secret</label>
+            <input type="password" id="client_secret" name="client_secret" placeholder="••••••••" required>
+        </div>
+        <div class="form-group">
+            <label for="redirect_uri">Redirect URI</label>
+            <input type="text" id="redirect_uri" name="redirect_uri" placeholder="http://localhost:8080/callback">
+        </div>
+        <div class="form-group">
+            <label for="permissions">Permissions</label>
+            <input type="text" id="permissions" name="permissions" placeholder="8" value="0">
+        </div>
+        <div class="form-group">
+            <label for="scopes">Scopes</label>
+            <input type="text" id="scopes" name="scopes" placeholder="bot applications.commands" value="bot">
+        </div>
+        <button type="submit" class="btn btn-primary">Add Bot</button>
+    </form>
+</section>
+
+<section class="card">
+    <h2>Bot List</h2>
+    {{if .Bots}}
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Client ID</th>
+                <th>Scopes</th>
+                <th>Redirect URI</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Bots}}
+            <tr>
+                <td>{{.Name}}</td>
+                <td><code>{{.ClientID}}</code></td>
+                <td>{{.Scopes}}</td>
+                <td class="muted">{{if .RedirectURI}}{{.RedirectURI}}{{else}}—{{end}}</td>
+                <td>
+                    {{if .Enabled}}
+                        <span class="badge badge-on">Enabled</span>
+                    {{else}}
+                        <span class="badge badge-off">Disabled</span>
+                    {{end}}
+                </td>
+                <td class="actions">
+                    <form method="POST" action="/admin/bots/{{.ID}}/toggle" style="display:inline">
+                        <button type="submit" class="btn btn-sm">{{if .Enabled}}Disable{{else}}Enable{{end}}</button>
+                    </form>
+                    <form method="POST" action="/admin/bots/{{.ID}}/delete" style="display:inline"
+                          onsubmit="return confirm('Delete {{.Name}}?')">
+                        <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+    {{else}}
+    <p class="muted">No bots configured yet.</p>
+    {{end}}
+</section>
+
+{{if .Installs}}
+<section class="card">
+    <h2>Install History</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Bot</th>
+                <th>Guild ID</th>
+                <th>Guild Name</th>
+                <th>Installed At</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Installs}}
+            <tr>
+                <td>{{.BotName}}</td>
+                <td><code>{{.GuildID}}</code></td>
+                <td>{{if .GuildName}}{{.GuildName}}{{else}}—{{end}}</td>
+                <td class="muted">{{.InstalledAt.Format "2006-01-02 15:04"}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</section>
+{{end}}
+
+<footer>
+    <a href="/">← Public Portal</a>
+</footer>
+{{end}}

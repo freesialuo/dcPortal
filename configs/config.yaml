@@ -1,0 +1,9 @@
+server:
+  port: 8080
+  base_url: "http://localhost:8080"
+
+admin:
+  token: "change-me-to-a-secure-token"
+
+database:
+  path: "./data/dcportal.db"

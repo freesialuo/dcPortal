@@ -1,0 +1,32 @@
+{{define "content"}}
+<header>
+    <h1>{{if .Success}}✅{{else}}❌{{end}} {{.Title}}</h1>
+</header>
+
+<div class="card result-card">
+    <p class="result-message">{{.Message}}</p>
+
+    {{if .Success}}
+        {{if .BotName}}
+        <div class="result-detail">
+            <span class="label">Bot:</span>
+            <span>{{.BotName}}</span>
+        </div>
+        {{end}}
+        {{if .GuildName}}
+        <div class="result-detail">
+            <span class="label">Guild:</span>
+            <span>{{.GuildName}}</span>
+        </div>
+        {{end}}
+        {{if .GuildID}}
+        <div class="result-detail">
+            <span class="label">Guild ID:</span>
+            <code>{{.GuildID}}</code>
+        </div>
+        {{end}}
+    {{end}}
+
+    <a href="/" class="btn btn-primary" style="margin-top: 1.5rem">← Back to Portal</a>
+</div>
+{{end}}

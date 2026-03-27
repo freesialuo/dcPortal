@@ -57,6 +57,7 @@ func main() {
 	}
 
 	adminTmpl := parsePage("web/templates/admin.html")
+	loginTmpl := parsePage("web/templates/login.html")
 	portalTmpl := parsePage("web/templates/portal.html")
 	resultTmpl := parsePage("web/templates/result.html")
 
@@ -69,17 +70,25 @@ func main() {
 	// Static files
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
 
-	// Public portal routes (with Discord OAuth2 flow)
+	// Home login routes
+	authHandler := handler.NewAuthHandler(loginTmpl, cfg.Admin.Token)
+	authHandler.RegisterRoutes(mux)
+
+	// Protected portal routes (with Discord OAuth2 flow)
 	portalHandler := handler.NewPortalHandler(st, portalTmpl, resultTmpl, dc)
-	portalHandler.RegisterRoutes(mux)
+	portalMux := http.NewServeMux()
+	portalHandler.RegisterRoutes(portalMux)
 
 	// Admin routes (protected)
 	adminHandler := handler.NewAdminHandler(st, adminTmpl)
 	adminMux := http.NewServeMux()
 	adminHandler.RegisterRoutes(adminMux)
 
-	// Wrap admin routes with auth middleware
-	authMiddleware := middleware.AdminAuth(cfg.Admin.Token)
+	// Wrap web routes with token auth middleware (redirect to home login page).
+	authMiddleware := middleware.AdminAuthWithRedirect(cfg.Admin.Token, "/")
+	mux.Handle("/portal", authMiddleware(portalMux))
+	mux.Handle("/install/", authMiddleware(portalMux))
+	mux.Handle("/callback", authMiddleware(portalMux))
 	mux.Handle("/admin", authMiddleware(adminMux))
 	mux.Handle("/admin/", authMiddleware(adminMux))
 

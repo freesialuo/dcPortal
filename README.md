@@ -65,11 +65,13 @@ volumes:
 
 ## 使用流程
 
-1. 使用 Header 认证访问管理页面，例如：
-   `curl -H "Authorization: Bearer YOUR_TOKEN" http://localhost:8080/admin`
-2. 添加 Bot：填写 Name、Client ID、Client Secret、Redirect URI（设为 `{BASE_URL}/callback`）、Permissions、Scopes
-3. 用户访问 `http://localhost:8080/` 看到可安装的 Bot
-4. 点击安装 → Discord OAuth2 授权 → 回调 → 安装成功
+1. 浏览器访问 `http://localhost:8080/`，先输入 `ADMIN token` 完成登录。
+2. 登录后访问管理页 `http://localhost:8080/admin` 添加 Bot：填写 Name、Client ID、Client Secret、Redirect URI（设为 `{BASE_URL}/callback`）、Permissions、Scopes。
+3. 登录后访问安装页 `http://localhost:8080/portal` 查看可安装 Bot。
+4. 点击安装 → Discord OAuth2 授权 → 回调（`/callback`）→ 安装成功。
+
+CLI 方式仍支持 Header 认证，例如：
+`curl -H "Authorization: Bearer YOUR_TOKEN" http://localhost:8080/admin`
 
 ## 开发
 

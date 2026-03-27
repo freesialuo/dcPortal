@@ -76,3 +76,37 @@ func TestAdminAuthRejectsQueryParam(t *testing.T) {
 		t.Errorf("query param auth should be rejected: status = %d, want %d", w.Code, http.StatusUnauthorized)
 	}
 }
+
+func TestAdminAuthWithRedirect(t *testing.T) {
+	token := "secret-token"
+	handler := AdminAuthWithRedirect(token, "/")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/admin", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusSeeOther)
+	}
+	if got := w.Header().Get("Location"); got != "/?next=%2Fadmin" {
+		t.Fatalf("Location = %q, want /?next=%%2Fadmin", got)
+	}
+}
+
+func TestAdminAuthWithRedirectAllowsValidToken(t *testing.T) {
+	token := "secret-token"
+	handler := AdminAuthWithRedirect(token, "/")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/admin", nil)
+	req.AddCookie(&http.Cookie{Name: "admin_token", Value: token})
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+}

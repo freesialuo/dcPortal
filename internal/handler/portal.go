@@ -46,7 +46,7 @@ func NewPortalHandler(s *store.Store, portalTmpl, resultTmpl *template.Template,
 
 // RegisterRoutes registers public portal routes on the given mux.
 func (h *PortalHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /{$}", h.index)
+	mux.HandleFunc("GET /portal", h.index)
 	mux.HandleFunc("GET /install/{id}", h.install)
 	mux.HandleFunc("GET /callback", h.callback)
 }

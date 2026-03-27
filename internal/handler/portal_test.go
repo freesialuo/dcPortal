@@ -105,7 +105,7 @@ func TestPortalIndex(t *testing.T) {
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("GET", "/portal", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 

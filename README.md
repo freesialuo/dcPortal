@@ -73,6 +73,59 @@ volumes:
 CLI 方式仍支持 Header 认证，例如：
 `curl -H "Authorization: Bearer YOUR_TOKEN" http://localhost:8080/admin`
 
+## 面板详细使用指南
+
+### 1) 首次登录与会话
+
+1. 打开首页 `/`，输入 `ADMIN token` 登录。
+2. 登录成功后会写入 `admin_token` Cookie，用于后续页面访问鉴权。
+3. 点击页面底部 `Logout` 可立即清除会话。
+
+### 2) 新增 Bot（Admin 页面）
+
+在 `/admin` 的 `Add Bot` 表单中：
+
+- `Bot Name`：仅用于面板显示。
+- `Client ID`：Discord Application 的 Client ID（必填）。
+- `Client Secret`：Discord Application 的 Client Secret（必填，敏感信息）。
+- `Redirect URI`：必须与 Discord Developer Portal 中配置一致，通常为 `{BASE_URL}/callback`。
+- `Permissions`：Discord 权限位整数（十进制）。
+- `Scopes`：常用为 `bot`，如果需要 Slash 命令可用 `bot applications.commands`。
+
+保存后 Bot 默认为 `Enabled`，会出现在 `/portal` 列表。
+
+### 3) 使用官方权限计算器（已接入）
+
+在 `Permissions` 字段下方点击 `Open Official Calculator`：
+
+1. 若 `Client ID` 有值，会跳转到 Discord 官方开发者后台该应用的 `OAuth2 URL Generator`。
+2. 若 `Client ID` 为空，会跳转到 Discord 应用列表页，先选择应用再进入 URL Generator。
+3. 在官方页面勾选所需权限后，复制生成的整数权限值，粘贴回 DCPortal 的 `Permissions` 字段。
+
+说明：官方计算器在 Discord Developer Portal 中运行，需要你已登录 Discord 开发者账号。
+
+### 4) 安装与回调验证
+
+1. 在 `/portal` 点击 `Install Bot`。
+2. Discord 授权成功后会回调 `/callback`。
+3. 成功页面会显示 Bot、Guild 信息；同时安装记录写入 Admin 的 `Install History`。
+
+### 5) Bot 维护操作
+
+- `Enable/Disable`：控制 Bot 是否在 `/portal` 对外可见。
+- `Delete`：删除 Bot 配置和对应安装记录（不可恢复）。
+
+### 6) 常见问题排查
+
+- 登录后仍提示未授权：
+  - 检查 `DCPORTAL_ADMIN_TOKEN` 是否与输入值一致。
+  - 检查浏览器是否禁用了 Cookie。
+- Discord 回调失败：
+  - 核对 `Redirect URI` 与 Discord 应用后台完全一致（包含协议、域名、端口、路径）。
+  - 确认 `BASE_URL` 配置与实际访问地址一致。
+- Bot 没出现在 `/portal`：
+  - 确认该 Bot 状态为 `Enabled`。
+
 ## 开发
 
 ```bash
@@ -84,5 +137,12 @@ make build       # 编译到 bin/dcportal
 
 ## CI/CD
 
-- Push 到 `main` 或创建 `v*` tag 时自动运行测试并推送 Docker 镜像到 GHCR
-- PR 仅运行测试
+- Push 到 `main`：仅运行测试（`vet` + `test`）
+- Push `v*` tag：运行测试并发布 Docker 镜像到 GHCR
+- PR：仅运行测试
+
+推荐发布流程：
+
+1. 提交代码并推送到 `main`
+2. 确认 `main` 的 CI 测试通过
+3. 创建并推送版本 tag（如 `v0.1.3`）触发发布

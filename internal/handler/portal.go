@@ -30,6 +30,7 @@ const stateTTL = 10 * time.Minute
 
 type stateEntry struct {
 	BotID     int64
+	LinkID    int64
 	ExpiresAt time.Time
 }
 
@@ -52,16 +53,16 @@ func (h *PortalHandler) RegisterRoutes(mux *http.ServeMux) {
 }
 
 func (h *PortalHandler) index(w http.ResponseWriter, r *http.Request) {
-	bots, err := h.store.ListEnabledBots()
+	links, err := h.store.ListEnabledInstallLinks()
 	if err != nil {
-		log.Printf("ERROR list enabled bots: %v", err)
+		log.Printf("ERROR list enabled install links: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
 	data := map[string]any{
 		"Title": "DCPortal — Bot Install",
-		"Bots":  bots,
+		"Links": links,
 	}
 	if err := h.portalTmpl.ExecuteTemplate(w, "layout.html", data); err != nil {
 		log.Printf("ERROR render portal: %v", err)
@@ -75,18 +76,18 @@ func (h *PortalHandler) install(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bot, err := h.store.GetBot(id)
+	installLink, err := h.store.GetInstallLinkWithBot(id)
 	if err != nil {
-		log.Printf("ERROR get bot %d: %v", id, err)
+		log.Printf("ERROR get install link %d: %v", id, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-	if bot == nil || !bot.Enabled {
-		http.Error(w, "Bot not found", http.StatusNotFound)
+	if installLink == nil || !installLink.Bot.Enabled || !installLink.Link.Enabled {
+		http.Error(w, "Install link not found", http.StatusNotFound)
 		return
 	}
 
-	// Generate CSRF state and store mapping to bot ID
+	// Generate CSRF state and store mapping to link+bot IDs.
 	state, err := generateState()
 	if err != nil {
 		log.Printf("ERROR generate state: %v", err)
@@ -97,12 +98,13 @@ func (h *PortalHandler) install(w http.ResponseWriter, r *http.Request) {
 	h.stateMu.Lock()
 	h.pruneExpiredStatesLocked(time.Now())
 	h.states[state] = stateEntry{
-		BotID:     bot.ID,
+		BotID:     installLink.Bot.ID,
+		LinkID:    installLink.Link.ID,
 		ExpiresAt: time.Now().Add(stateTTL),
 	}
 	h.stateMu.Unlock()
 
-	http.Redirect(w, r, bot.OAuthURL(state), http.StatusTemporaryRedirect)
+	http.Redirect(w, r, installLink.Link.OAuthURL(installLink.Bot.ClientID, state), http.StatusTemporaryRedirect)
 }
 
 func (h *PortalHandler) callback(w http.ResponseWriter, r *http.Request) {
@@ -136,17 +138,17 @@ func (h *PortalHandler) callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Look up the bot
-	bot, err := h.store.GetBot(entry.BotID)
-	if err != nil || bot == nil {
-		log.Printf("ERROR get bot %d: %v", entry.BotID, err)
-		http.Error(w, "Bot not found", http.StatusNotFound)
+	installLink, err := h.store.GetInstallLinkWithBot(entry.LinkID)
+	if err != nil || installLink == nil {
+		log.Printf("ERROR get install link %d: %v", entry.LinkID, err)
+		http.Error(w, "Install link not found", http.StatusNotFound)
 		return
 	}
+	bot := &installLink.Bot
 
 	// Exchange the authorization code for an access token
 	tokenResp, err := h.discordClient.ExchangeCode(
-		bot.ClientID, bot.ClientSecret, code, bot.RedirectURI,
+		bot.ClientID, bot.ClientSecret, code, installLink.Link.RedirectURI,
 	)
 	if err != nil {
 		log.Printf("ERROR exchange code for bot %d: %v", entry.BotID, err)
@@ -194,7 +196,7 @@ func (h *PortalHandler) callback(w http.ResponseWriter, r *http.Request) {
 					memberCount = guild.ApproximateMemberCount
 				}
 			}
-			if _, err := h.store.RecordInstall(entry.BotID, guildID, guildName, memberCount, tokenResp.AccessToken, tokenResp.RefreshToken); err != nil {
+			if _, err := h.store.RecordInstallWithLink(entry.BotID, installLink.Link.ID, installLink.Link.Name, guildID, guildName, memberCount, tokenResp.AccessToken, tokenResp.RefreshToken); err != nil {
 				log.Printf("ERROR record install: %v", err)
 			}
 		} else {

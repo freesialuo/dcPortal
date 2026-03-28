@@ -82,6 +82,19 @@ func migrate(db *sql.DB) error {
 			UNIQUE(bot_id, guild_id)
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_guild_blacklist_bot ON guild_blacklist(bot_id)`,
+		`CREATE TABLE IF NOT EXISTS install_links (
+			id           INTEGER PRIMARY KEY AUTOINCREMENT,
+			bot_id       INTEGER NOT NULL,
+			name         TEXT NOT NULL,
+			permissions  TEXT NOT NULL DEFAULT '',
+			scopes       TEXT NOT NULL DEFAULT 'bot',
+			redirect_uri TEXT NOT NULL DEFAULT '',
+			enabled      INTEGER NOT NULL DEFAULT 1,
+			created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_install_links_bot ON install_links(bot_id)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_install_links_bot_name_unique ON install_links(bot_id, name)`,
 	}
 	for _, stmt := range stmts {
 		if _, err := db.Exec(stmt); err != nil {
@@ -102,7 +115,28 @@ func migrate(db *sql.DB) error {
 	if _, err := db.Exec(`ALTER TABLE guild_installs ADD COLUMN user_refresh_token TEXT NOT NULL DEFAULT ''`); err != nil && !isDuplicateColumnErr(err) {
 		return fmt.Errorf("add guild_installs.user_refresh_token: %w", err)
 	}
+	if _, err := db.Exec(`ALTER TABLE guild_installs ADD COLUMN link_id INTEGER NOT NULL DEFAULT 0`); err != nil && !isDuplicateColumnErr(err) {
+		return fmt.Errorf("add guild_installs.link_id: %w", err)
+	}
+	if _, err := db.Exec(`ALTER TABLE guild_installs ADD COLUMN link_name TEXT NOT NULL DEFAULT ''`); err != nil && !isDuplicateColumnErr(err) {
+		return fmt.Errorf("add guild_installs.link_name: %w", err)
+	}
+	if err := ensureDefaultInstallLinks(db); err != nil {
+		return fmt.Errorf("ensure default install links: %w", err)
+	}
 	return nil
+}
+
+func ensureDefaultInstallLinks(db *sql.DB) error {
+	_, err := db.Exec(`
+		INSERT INTO install_links (bot_id, name, permissions, scopes, redirect_uri, enabled)
+		SELECT b.id, 'Default', b.permissions, b.scopes, b.redirect_uri, 1
+		FROM bots b
+		WHERE NOT EXISTS (
+			SELECT 1 FROM install_links il WHERE il.bot_id = b.id
+		)
+	`)
+	return err
 }
 
 func isDuplicateColumnErr(err error) bool {
@@ -116,7 +150,13 @@ func isDuplicateColumnErr(err error) bool {
 
 // CreateBot inserts a new bot record.
 func (s *Store) CreateBot(b *model.Bot) error {
-	result, err := s.db.Exec(
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	result, err := tx.Exec(
 		`INSERT INTO bots (name, client_id, client_secret, bot_token, permissions, scopes, redirect_uri, enabled)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		b.Name, b.ClientID, b.ClientSecret, b.BotToken, b.Permissions, b.Scopes, b.RedirectURI, b.Enabled,
@@ -127,6 +167,16 @@ func (s *Store) CreateBot(b *model.Bot) error {
 	id, err := result.LastInsertId()
 	if err != nil {
 		return fmt.Errorf("get last insert id: %w", err)
+	}
+	if _, err := tx.Exec(
+		`INSERT INTO install_links (bot_id, name, permissions, scopes, redirect_uri, enabled)
+		 VALUES (?, ?, ?, ?, ?, 1)`,
+		id, "Default", b.Permissions, b.Scopes, b.RedirectURI,
+	); err != nil {
+		return fmt.Errorf("insert default install link: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit tx: %w", err)
 	}
 	b.ID = id
 	b.CreatedAt = time.Now()
@@ -212,6 +262,167 @@ func (s *Store) UpdateBot(b *model.Bot) error {
 	return nil
 }
 
+const installLinkColumns = `id, bot_id, name, permissions, scopes, redirect_uri, enabled, created_at`
+
+func scanInstallLink(sc interface{ Scan(...any) error }) (*model.InstallLink, error) {
+	var l model.InstallLink
+	err := sc.Scan(&l.ID, &l.BotID, &l.Name, &l.Permissions, &l.Scopes, &l.RedirectURI, &l.Enabled, &l.CreatedAt)
+	return &l, err
+}
+
+// CreateInstallLink inserts an install link under a bot.
+func (s *Store) CreateInstallLink(l *model.InstallLink) error {
+	result, err := s.db.Exec(
+		`INSERT INTO install_links (bot_id, name, permissions, scopes, redirect_uri, enabled)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
+		l.BotID, l.Name, l.Permissions, l.Scopes, l.RedirectURI, l.Enabled,
+	)
+	if err != nil {
+		return fmt.Errorf("insert install link: %w", err)
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return fmt.Errorf("get last insert id: %w", err)
+	}
+	l.ID = id
+	l.CreatedAt = time.Now()
+	return nil
+}
+
+// ListInstallLinksByBot returns all install links for a bot.
+func (s *Store) ListInstallLinksByBot(botID int64) ([]model.InstallLink, error) {
+	rows, err := s.db.Query(
+		`SELECT `+installLinkColumns+` FROM install_links WHERE bot_id = ? ORDER BY id`,
+		botID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query install links by bot: %w", err)
+	}
+	defer rows.Close()
+
+	var links []model.InstallLink
+	for rows.Next() {
+		l, err := scanInstallLink(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan install link: %w", err)
+		}
+		links = append(links, *l)
+	}
+	return links, rows.Err()
+}
+
+// GetInstallLink returns an install link by ID.
+func (s *Store) GetInstallLink(id int64) (*model.InstallLink, error) {
+	l, err := scanInstallLink(s.db.QueryRow("SELECT "+installLinkColumns+" FROM install_links WHERE id = ?", id))
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get install link: %w", err)
+	}
+	return l, nil
+}
+
+// GetInstallLinkWithBot returns install link data with its bot record.
+func (s *Store) GetInstallLinkWithBot(id int64) (*model.InstallLinkWithBot, error) {
+	row := s.db.QueryRow(`
+		SELECT il.id, il.bot_id, il.name, il.permissions, il.scopes, il.redirect_uri, il.enabled, il.created_at,
+		       b.id, b.name, b.client_id, b.client_secret, b.bot_token, b.permissions, b.scopes, b.redirect_uri, b.enabled, b.created_at
+		FROM install_links il
+		JOIN bots b ON b.id = il.bot_id
+		WHERE il.id = ?`, id)
+
+	var link model.InstallLink
+	var bot model.Bot
+	if err := row.Scan(
+		&link.ID, &link.BotID, &link.Name, &link.Permissions, &link.Scopes, &link.RedirectURI, &link.Enabled, &link.CreatedAt,
+		&bot.ID, &bot.Name, &bot.ClientID, &bot.ClientSecret, &bot.BotToken, &bot.Permissions, &bot.Scopes, &bot.RedirectURI, &bot.Enabled, &bot.CreatedAt,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get install link with bot: %w", err)
+	}
+	return &model.InstallLinkWithBot{Link: link, Bot: bot}, nil
+}
+
+// UpdateInstallLink updates an install link.
+func (s *Store) UpdateInstallLink(l *model.InstallLink) error {
+	result, err := s.db.Exec(
+		`UPDATE install_links
+		 SET name = ?, permissions = ?, scopes = ?, redirect_uri = ?, enabled = ?
+		 WHERE id = ?`,
+		l.Name, l.Permissions, l.Scopes, l.RedirectURI, l.Enabled, l.ID,
+	)
+	if err != nil {
+		return fmt.Errorf("update install link: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("update install link rows affected: %w", err)
+	}
+	if rows == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ToggleInstallLink flips the enabled status of an install link.
+func (s *Store) ToggleInstallLink(id int64) error {
+	result, err := s.db.Exec(`UPDATE install_links SET enabled = NOT enabled WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("toggle install link: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("toggle install link rows affected: %w", err)
+	}
+	if rows == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// DeleteInstallLink deletes an install link.
+func (s *Store) DeleteInstallLink(id int64) error {
+	result, err := s.db.Exec(`DELETE FROM install_links WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("delete install link: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("delete install link rows affected: %w", err)
+	}
+	if rows == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ListEnabledInstallLinks returns enabled links for enabled bots for the portal.
+func (s *Store) ListEnabledInstallLinks() ([]model.InstallLink, error) {
+	rows, err := s.db.Query(`
+		SELECT il.id, il.bot_id, b.name, il.name, il.permissions, il.scopes, il.redirect_uri, il.enabled, il.created_at
+		FROM install_links il
+		JOIN bots b ON b.id = il.bot_id
+		WHERE il.enabled = 1 AND b.enabled = 1
+		ORDER BY b.id, il.id`)
+	if err != nil {
+		return nil, fmt.Errorf("query enabled install links: %w", err)
+	}
+	defer rows.Close()
+
+	var links []model.InstallLink
+	for rows.Next() {
+		var l model.InstallLink
+		if err := rows.Scan(&l.ID, &l.BotID, &l.BotName, &l.Name, &l.Permissions, &l.Scopes, &l.RedirectURI, &l.Enabled, &l.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan enabled install link: %w", err)
+		}
+		links = append(links, l)
+	}
+	return links, rows.Err()
+}
+
 // ToggleBot flips the enabled status of a bot.
 func (s *Store) ToggleBot(id int64) error {
 	result, err := s.db.Exec("UPDATE bots SET enabled = NOT enabled WHERE id = ?", id)
@@ -259,10 +470,16 @@ func (s *Store) DeleteBot(id int64) error {
 // ---- Guild Installs ----
 
 // RecordInstall records a bot installation to a guild.
+// This compatibility method records without link metadata.
 func (s *Store) RecordInstall(botID int64, guildID, guildName string, memberCount int, userAccessToken, userRefreshToken string) (*model.GuildInstall, error) {
+	return s.RecordInstallWithLink(botID, 0, "", guildID, guildName, memberCount, userAccessToken, userRefreshToken)
+}
+
+// RecordInstallWithLink records a bot installation to a guild including link metadata.
+func (s *Store) RecordInstallWithLink(botID, linkID int64, linkName, guildID, guildName string, memberCount int, userAccessToken, userRefreshToken string) (*model.GuildInstall, error) {
 	result, err := s.db.Exec(
-		"INSERT INTO guild_installs (bot_id, guild_id, guild_name, member_count, user_access_token, user_refresh_token) VALUES (?, ?, ?, ?, ?, ?)",
-		botID, guildID, guildName, memberCount, userAccessToken, userRefreshToken,
+		"INSERT INTO guild_installs (bot_id, link_id, link_name, guild_id, guild_name, member_count, user_access_token, user_refresh_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		botID, linkID, linkName, guildID, guildName, memberCount, userAccessToken, userRefreshToken,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("insert install: %w", err)
@@ -271,6 +488,8 @@ func (s *Store) RecordInstall(botID int64, guildID, guildName string, memberCoun
 	return &model.GuildInstall{
 		ID:               id,
 		BotID:            botID,
+		LinkID:           linkID,
+		LinkName:         linkName,
 		GuildID:          guildID,
 		GuildName:        guildName,
 		MemberCount:      memberCount,
@@ -283,7 +502,7 @@ func (s *Store) RecordInstall(botID int64, guildID, guildName string, memberCoun
 // ListInstalls returns all installation records with bot name.
 func (s *Store) ListInstalls() ([]model.GuildInstall, error) {
 	rows, err := s.db.Query(`
-		SELECT gi.id, gi.bot_id, b.name, gi.guild_id, gi.guild_name, gi.member_count, gi.user_access_token, gi.user_refresh_token, gi.installed_at
+		SELECT gi.id, gi.bot_id, b.name, gi.link_id, gi.link_name, gi.guild_id, gi.guild_name, gi.member_count, gi.user_access_token, gi.user_refresh_token, gi.installed_at
 		FROM guild_installs gi
 		JOIN bots b ON b.id = gi.bot_id
 		ORDER BY gi.installed_at DESC`)
@@ -295,7 +514,7 @@ func (s *Store) ListInstalls() ([]model.GuildInstall, error) {
 	var installs []model.GuildInstall
 	for rows.Next() {
 		var gi model.GuildInstall
-		if err := rows.Scan(&gi.ID, &gi.BotID, &gi.BotName, &gi.GuildID, &gi.GuildName, &gi.MemberCount, &gi.UserAccessToken, &gi.UserRefreshToken, &gi.InstalledAt); err != nil {
+		if err := rows.Scan(&gi.ID, &gi.BotID, &gi.BotName, &gi.LinkID, &gi.LinkName, &gi.GuildID, &gi.GuildName, &gi.MemberCount, &gi.UserAccessToken, &gi.UserRefreshToken, &gi.InstalledAt); err != nil {
 			return nil, fmt.Errorf("scan install: %w", err)
 		}
 		installs = append(installs, gi)
@@ -306,7 +525,7 @@ func (s *Store) ListInstalls() ([]model.GuildInstall, error) {
 // ListInstallsByBot returns installation records for a specific bot.
 func (s *Store) ListInstallsByBot(botID int64) ([]model.GuildInstall, error) {
 	rows, err := s.db.Query(`
-		SELECT gi.id, gi.bot_id, b.name, gi.guild_id, gi.guild_name, gi.member_count, gi.user_access_token, gi.user_refresh_token, gi.installed_at
+		SELECT gi.id, gi.bot_id, b.name, gi.link_id, gi.link_name, gi.guild_id, gi.guild_name, gi.member_count, gi.user_access_token, gi.user_refresh_token, gi.installed_at
 		FROM guild_installs gi
 		JOIN bots b ON b.id = gi.bot_id
 		WHERE gi.bot_id = ?
@@ -319,7 +538,7 @@ func (s *Store) ListInstallsByBot(botID int64) ([]model.GuildInstall, error) {
 	var installs []model.GuildInstall
 	for rows.Next() {
 		var gi model.GuildInstall
-		if err := rows.Scan(&gi.ID, &gi.BotID, &gi.BotName, &gi.GuildID, &gi.GuildName, &gi.MemberCount, &gi.UserAccessToken, &gi.UserRefreshToken, &gi.InstalledAt); err != nil {
+		if err := rows.Scan(&gi.ID, &gi.BotID, &gi.BotName, &gi.LinkID, &gi.LinkName, &gi.GuildID, &gi.GuildName, &gi.MemberCount, &gi.UserAccessToken, &gi.UserRefreshToken, &gi.InstalledAt); err != nil {
 			return nil, fmt.Errorf("scan install: %w", err)
 		}
 		installs = append(installs, gi)
@@ -330,13 +549,13 @@ func (s *Store) ListInstallsByBot(botID int64) ([]model.GuildInstall, error) {
 // GetInstall returns an installation record by ID.
 func (s *Store) GetInstall(id int64) (*model.GuildInstall, error) {
 	row := s.db.QueryRow(`
-		SELECT gi.id, gi.bot_id, b.name, gi.guild_id, gi.guild_name, gi.member_count, gi.user_access_token, gi.user_refresh_token, gi.installed_at
+		SELECT gi.id, gi.bot_id, b.name, gi.link_id, gi.link_name, gi.guild_id, gi.guild_name, gi.member_count, gi.user_access_token, gi.user_refresh_token, gi.installed_at
 		FROM guild_installs gi
 		JOIN bots b ON b.id = gi.bot_id
 		WHERE gi.id = ?`, id)
 
 	var gi model.GuildInstall
-	if err := row.Scan(&gi.ID, &gi.BotID, &gi.BotName, &gi.GuildID, &gi.GuildName, &gi.MemberCount, &gi.UserAccessToken, &gi.UserRefreshToken, &gi.InstalledAt); err != nil {
+	if err := row.Scan(&gi.ID, &gi.BotID, &gi.BotName, &gi.LinkID, &gi.LinkName, &gi.GuildID, &gi.GuildName, &gi.MemberCount, &gi.UserAccessToken, &gi.UserRefreshToken, &gi.InstalledAt); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}

@@ -81,7 +81,7 @@ func testPortalTmpl() *template.Template {
 	tmpl := template.Must(template.New("layout.html").Parse(
 		`{{block "content" .}}{{end}}`))
 	template.Must(tmpl.New("portal.html").Parse(
-		`{{define "content"}}{{range .Bots}}{{.Name}},{{end}}{{end}}`))
+		`{{define "content"}}{{range .Links}}{{.BotName}}:{{.Name}},{{end}}{{end}}`))
 	return tmpl
 }
 
@@ -114,8 +114,8 @@ func TestPortalIndex(t *testing.T) {
 	}
 
 	body := w.Body.String()
-	if body != "Bot1," {
-		t.Errorf("body = %q, want only enabled bot", body)
+	if body != "Bot1:Default," {
+		t.Errorf("body = %q, want only enabled bot install link", body)
 	}
 }
 
@@ -228,6 +228,9 @@ func TestPortalCallback(t *testing.T) {
 	}
 	if installs[0].GuildName != "Mock Guild" {
 		t.Errorf("GuildName = %q", installs[0].GuildName)
+	}
+	if installs[0].LinkID == 0 || installs[0].LinkName == "" {
+		t.Errorf("install should record link info, got LinkID=%d LinkName=%q", installs[0].LinkID, installs[0].LinkName)
 	}
 }
 

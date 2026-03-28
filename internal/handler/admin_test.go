@@ -205,6 +205,94 @@ func TestAdminUpdateBotClearToken(t *testing.T) {
 	}
 }
 
+func TestAdminCreateInstallLink(t *testing.T) {
+	h, s := setupAdminTest(t)
+
+	bot := &model.Bot{
+		Name:         "Bot1",
+		ClientID:     "12345",
+		ClientSecret: "secret",
+		RedirectURI:  "http://localhost:8080/callback",
+		Enabled:      true,
+	}
+	if err := s.CreateBot(bot); err != nil {
+		t.Fatalf("CreateBot: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	form := url.Values{
+		"link_name":    {"High Perm"},
+		"permissions":  {"8"},
+		"scopes":       {"bot applications.commands"},
+		"redirect_uri": {"http://localhost:8080/callback"},
+	}
+	req := httptest.NewRequest("POST", "/admin/bots/"+strconv.FormatInt(bot.ID, 10)+"/links", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusSeeOther)
+	}
+
+	links, err := s.ListInstallLinksByBot(bot.ID)
+	if err != nil {
+		t.Fatalf("ListInstallLinksByBot: %v", err)
+	}
+	if len(links) != 2 {
+		t.Fatalf("expected default link + new link, got %d", len(links))
+	}
+}
+
+func TestAdminUpdateInstallLink(t *testing.T) {
+	h, s := setupAdminTest(t)
+
+	bot := &model.Bot{
+		Name:         "Bot1",
+		ClientID:     "12345",
+		ClientSecret: "secret",
+		Enabled:      true,
+	}
+	if err := s.CreateBot(bot); err != nil {
+		t.Fatalf("CreateBot: %v", err)
+	}
+	links, err := s.ListInstallLinksByBot(bot.ID)
+	if err != nil || len(links) == 0 {
+		t.Fatalf("ListInstallLinksByBot: %v", err)
+	}
+	linkID := links[0].ID
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	form := url.Values{
+		"link_name":    {"Updated Default"},
+		"permissions":  {"16"},
+		"scopes":       {"bot"},
+		"redirect_uri": {"https://example.com/callback"},
+	}
+	req := httptest.NewRequest("POST", "/admin/links/"+strconv.FormatInt(linkID, 10)+"/update", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusSeeOther)
+	}
+
+	updated, err := s.GetInstallLink(linkID)
+	if err != nil {
+		t.Fatalf("GetInstallLink: %v", err)
+	}
+	if updated.Name != "Updated Default" {
+		t.Errorf("Name = %q", updated.Name)
+	}
+	if updated.Permissions != "16" {
+		t.Errorf("Permissions = %q", updated.Permissions)
+	}
+}
+
 func TestAdminIndex(t *testing.T) {
 	h, _ := setupAdminTest(t)
 

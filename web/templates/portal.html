@@ -4,11 +4,12 @@
     <p class="subtitle">Authorized Bot Installation</p>
 </header>
 
-{{if .Bots}}
+{{if .Links}}
 <div class="bot-grid">
-    {{range .Bots}}
+    {{range .Links}}
     <div class="card bot-card">
-        <h3>{{.Name}}</h3>
+        <h3>{{.BotName}}</h3>
+        <p>{{.Name}}</p>
         <p class="muted">Scopes: {{.Scopes}}</p>
         <a href="/install/{{.ID}}" class="btn btn-primary">Install Bot</a>
     </div>

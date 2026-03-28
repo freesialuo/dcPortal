@@ -34,6 +34,10 @@ func (h *AdminHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/bots/{id}/update", h.updateBot)
 	mux.HandleFunc("POST /admin/bots/{id}/toggle", h.toggleBot)
 	mux.HandleFunc("POST /admin/bots/{id}/delete", h.deleteBot)
+	mux.HandleFunc("POST /admin/bots/{id}/links", h.createInstallLink)
+	mux.HandleFunc("POST /admin/links/{id}/update", h.updateInstallLink)
+	mux.HandleFunc("POST /admin/links/{id}/toggle", h.toggleInstallLink)
+	mux.HandleFunc("POST /admin/links/{id}/delete", h.deleteInstallLink)
 	mux.HandleFunc("POST /admin/installs/refresh", h.refreshAllInstalls)
 	mux.HandleFunc("POST /admin/installs/{id}/refresh", h.refreshInstall)
 	mux.HandleFunc("POST /admin/installs/{id}/revoke", h.revokeInstallAuth)
@@ -47,6 +51,17 @@ func (h *AdminHandler) index(w http.ResponseWriter, r *http.Request) {
 		log.Printf("ERROR list bots: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
+	}
+
+	linksByBot := make(map[int64][]model.InstallLink, len(bots))
+	for _, bot := range bots {
+		links, err := h.store.ListInstallLinksByBot(bot.ID)
+		if err != nil {
+			log.Printf("ERROR list install links by bot %d: %v", bot.ID, err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+		linksByBot[bot.ID] = links
 	}
 
 	installs, err := h.store.ListInstalls()
@@ -64,11 +79,12 @@ func (h *AdminHandler) index(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]any{
-		"Title":     "Admin — DCPortal",
-		"Bots":      bots,
-		"Installs":  installs,
-		"Blacklist": blacklist,
-		"Notice":    strings.TrimSpace(r.URL.Query().Get("notice")),
+		"Title":      "Admin — DCPortal",
+		"Bots":       bots,
+		"LinksByBot": linksByBot,
+		"Installs":   installs,
+		"Blacklist":  blacklist,
+		"Notice":     strings.TrimSpace(r.URL.Query().Get("notice")),
 	}
 	if err := h.tmpl.ExecuteTemplate(w, "layout.html", data); err != nil {
 		log.Printf("ERROR render admin: %v", err)
@@ -215,6 +231,144 @@ func (h *AdminHandler) updateBot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.redirectWithNotice(w, r, "Bot updated")
+}
+
+func (h *AdminHandler) createInstallLink(w http.ResponseWriter, r *http.Request) {
+	botID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid bot ID", http.StatusBadRequest)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+
+	bot, err := h.store.GetBot(botID)
+	if err != nil {
+		log.Printf("ERROR get bot %d for create install link: %v", botID, err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	if bot == nil {
+		http.Error(w, "Bot not found", http.StatusNotFound)
+		return
+	}
+
+	link := &model.InstallLink{
+		BotID:       botID,
+		Name:        strings.TrimSpace(r.FormValue("link_name")),
+		Permissions: strings.TrimSpace(r.FormValue("permissions")),
+		Scopes:      strings.TrimSpace(r.FormValue("scopes")),
+		RedirectURI: strings.TrimSpace(r.FormValue("redirect_uri")),
+		Enabled:     true,
+	}
+	if link.Name == "" {
+		http.Error(w, "Link name is required", http.StatusBadRequest)
+		return
+	}
+	if link.Scopes == "" {
+		link.Scopes = "bot"
+	}
+	if link.RedirectURI == "" {
+		link.RedirectURI = bot.RedirectURI
+	}
+
+	if err := h.store.CreateInstallLink(link); err != nil {
+		log.Printf("ERROR create install link bot=%d: %v", botID, err)
+		http.Error(w, "Failed to create install link", http.StatusInternalServerError)
+		return
+	}
+
+	h.redirectWithNotice(w, r, "Install link created")
+}
+
+func (h *AdminHandler) updateInstallLink(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid link ID", http.StatusBadRequest)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+
+	existing, err := h.store.GetInstallLink(id)
+	if err != nil {
+		log.Printf("ERROR get install link %d for update: %v", id, err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	if existing == nil {
+		http.Error(w, "Install link not found", http.StatusNotFound)
+		return
+	}
+
+	updated := &model.InstallLink{
+		ID:          existing.ID,
+		BotID:       existing.BotID,
+		Name:        strings.TrimSpace(r.FormValue("link_name")),
+		Permissions: strings.TrimSpace(r.FormValue("permissions")),
+		Scopes:      strings.TrimSpace(r.FormValue("scopes")),
+		RedirectURI: strings.TrimSpace(r.FormValue("redirect_uri")),
+		Enabled:     existing.Enabled,
+	}
+	if updated.Name == "" {
+		http.Error(w, "Link name is required", http.StatusBadRequest)
+		return
+	}
+	if updated.Scopes == "" {
+		updated.Scopes = "bot"
+	}
+
+	if err := h.store.UpdateInstallLink(updated); err != nil {
+		log.Printf("ERROR update install link %d: %v", id, err)
+		if errors.Is(err, store.ErrNotFound) {
+			http.Error(w, "Install link not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "Failed to update install link", http.StatusInternalServerError)
+		return
+	}
+
+	h.redirectWithNotice(w, r, "Install link updated")
+}
+
+func (h *AdminHandler) toggleInstallLink(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid link ID", http.StatusBadRequest)
+		return
+	}
+	if err := h.store.ToggleInstallLink(id); err != nil {
+		log.Printf("ERROR toggle install link %d: %v", id, err)
+		if errors.Is(err, store.ErrNotFound) {
+			http.Error(w, "Install link not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "Failed to toggle install link", http.StatusInternalServerError)
+		return
+	}
+	h.redirectWithNotice(w, r, "Install link status updated")
+}
+
+func (h *AdminHandler) deleteInstallLink(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid link ID", http.StatusBadRequest)
+		return
+	}
+	if err := h.store.DeleteInstallLink(id); err != nil {
+		log.Printf("ERROR delete install link %d: %v", id, err)
+		if errors.Is(err, store.ErrNotFound) {
+			http.Error(w, "Install link not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "Failed to delete install link", http.StatusInternalServerError)
+		return
+	}
+	h.redirectWithNotice(w, r, "Install link deleted")
 }
 
 func (h *AdminHandler) refreshAllInstalls(w http.ResponseWriter, r *http.Request) {

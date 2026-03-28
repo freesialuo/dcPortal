@@ -55,6 +55,17 @@ func TestCreateAndListBots(t *testing.T) {
 	if bots[0].RedirectURI != "http://localhost:8080/callback" {
 		t.Errorf("RedirectURI = %q", bots[0].RedirectURI)
 	}
+
+	links, err := s.ListInstallLinksByBot(bot.ID)
+	if err != nil {
+		t.Fatalf("ListInstallLinksByBot: %v", err)
+	}
+	if len(links) != 1 {
+		t.Fatalf("expected 1 default install link, got %d", len(links))
+	}
+	if links[0].Name != "Default" {
+		t.Errorf("default link name = %q", links[0].Name)
+	}
 }
 
 func TestGetBot(t *testing.T) {
@@ -322,5 +333,60 @@ func TestGuildBlacklist(t *testing.T) {
 	}
 	if list[0].GuildID != "guild-123" {
 		t.Errorf("GuildID = %q", list[0].GuildID)
+	}
+}
+
+func TestInstallLinkCRUD(t *testing.T) {
+	s := newTestStore(t)
+
+	bot := testBot("Bot1", "111")
+	if err := s.CreateBot(bot); err != nil {
+		t.Fatalf("CreateBot: %v", err)
+	}
+
+	link := &model.InstallLink{
+		BotID:       bot.ID,
+		Name:        "Limited",
+		Permissions: "0",
+		Scopes:      "bot",
+		RedirectURI: "https://example.com/callback",
+		Enabled:     true,
+	}
+	if err := s.CreateInstallLink(link); err != nil {
+		t.Fatalf("CreateInstallLink: %v", err)
+	}
+
+	got, err := s.GetInstallLink(link.ID)
+	if err != nil {
+		t.Fatalf("GetInstallLink: %v", err)
+	}
+	if got == nil || got.Name != "Limited" {
+		t.Fatalf("unexpected link: %+v", got)
+	}
+
+	got.Name = "Limited-Updated"
+	got.Enabled = false
+	if err := s.UpdateInstallLink(got); err != nil {
+		t.Fatalf("UpdateInstallLink: %v", err)
+	}
+
+	if err := s.ToggleInstallLink(got.ID); err != nil {
+		t.Fatalf("ToggleInstallLink: %v", err)
+	}
+	got, _ = s.GetInstallLink(got.ID)
+	if !got.Enabled {
+		t.Fatalf("expected link enabled after toggle")
+	}
+
+	links, err := s.ListInstallLinksByBot(bot.ID)
+	if err != nil {
+		t.Fatalf("ListInstallLinksByBot: %v", err)
+	}
+	if len(links) != 2 {
+		t.Fatalf("expected 2 links (default + custom), got %d", len(links))
+	}
+
+	if err := s.DeleteInstallLink(got.ID); err != nil {
+		t.Fatalf("DeleteInstallLink: %v", err)
 	}
 }

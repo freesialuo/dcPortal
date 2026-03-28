@@ -53,15 +53,16 @@ func (h *AdminHandler) index(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	allLinks, err := h.store.ListInstallLinks()
+	if err != nil {
+		log.Printf("ERROR list install links: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
 	linksByBot := make(map[int64][]model.InstallLink, len(bots))
-	for _, bot := range bots {
-		links, err := h.store.ListInstallLinksByBot(bot.ID)
-		if err != nil {
-			log.Printf("ERROR list install links by bot %d: %v", bot.ID, err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			return
-		}
-		linksByBot[bot.ID] = links
+	for _, link := range allLinks {
+		linksByBot[link.BotID] = append(linksByBot[link.BotID], link)
 	}
 
 	installs, err := h.store.ListInstalls()

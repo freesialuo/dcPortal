@@ -81,6 +81,43 @@
                     <form method="POST" action="/admin/bots/{{.ID}}/toggle" style="display:inline">
                         <button type="submit" class="btn btn-sm">{{if .Enabled}}Disable{{else}}Enable{{end}}</button>
                     </form>
+                    <details style="display:inline-block">
+                        <summary class="btn btn-sm" style="list-style:none;cursor:pointer">Edit</summary>
+                        <form method="POST" action="/admin/bots/{{.ID}}/update" class="form-grid" style="margin-top:0.5rem;min-width:320px">
+                            <div class="form-group">
+                                <label for="edit-name-{{.ID}}">Bot Name</label>
+                                <input type="text" id="edit-name-{{.ID}}" name="name" value="{{.Name}}" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-client-id-{{.ID}}">Client ID</label>
+                                <input type="text" id="edit-client-id-{{.ID}}" name="client_id" value="{{.ClientID}}" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-client-secret-{{.ID}}">Client Secret (leave blank to keep)</label>
+                                <input type="password" id="edit-client-secret-{{.ID}}" name="client_secret" placeholder="Leave blank to keep current">
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-bot-token-{{.ID}}">Bot Token (leave blank to keep)</label>
+                                <input type="password" id="edit-bot-token-{{.ID}}" name="bot_token" placeholder="Leave blank to keep current">
+                                <label style="margin-top:0.35rem">
+                                    <input type="checkbox" name="clear_bot_token" value="1"> Clear Bot Token
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-redirect-uri-{{.ID}}">Redirect URI</label>
+                                <input type="text" id="edit-redirect-uri-{{.ID}}" name="redirect_uri" value="{{.RedirectURI}}">
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-permissions-{{.ID}}">Permissions</label>
+                                <input type="text" id="edit-permissions-{{.ID}}" name="permissions" value="{{.Permissions}}">
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-scopes-{{.ID}}">Scopes</label>
+                                <input type="text" id="edit-scopes-{{.ID}}" name="scopes" value="{{.Scopes}}">
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-sm">Save Changes</button>
+                        </form>
+                    </details>
                     <form method="POST" action="/admin/bots/{{.ID}}/delete" style="display:inline"
                           onsubmit="return confirm('Delete {{.Name}}?')">
                         <button type="submit" class="btn btn-sm btn-danger">Delete</button>

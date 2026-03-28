@@ -106,6 +106,72 @@ func TestToggleBot(t *testing.T) {
 	}
 }
 
+func TestUpdateBot(t *testing.T) {
+	s := newTestStore(t)
+
+	bot := testBot("Bot1", "111")
+	bot.BotToken = "bot-token-1"
+	if err := s.CreateBot(bot); err != nil {
+		t.Fatalf("CreateBot: %v", err)
+	}
+
+	bot.Name = "Bot1-Updated"
+	bot.ClientID = "222"
+	bot.ClientSecret = "secret-222"
+	bot.BotToken = ""
+	bot.Permissions = "16"
+	bot.Scopes = "bot applications.commands"
+	bot.RedirectURI = "https://example.com/callback"
+	bot.Enabled = false
+
+	if err := s.UpdateBot(bot); err != nil {
+		t.Fatalf("UpdateBot: %v", err)
+	}
+
+	got, err := s.GetBot(bot.ID)
+	if err != nil {
+		t.Fatalf("GetBot: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected bot, got nil")
+	}
+	if got.Name != "Bot1-Updated" {
+		t.Errorf("Name = %q", got.Name)
+	}
+	if got.ClientID != "222" {
+		t.Errorf("ClientID = %q", got.ClientID)
+	}
+	if got.ClientSecret != "secret-222" {
+		t.Errorf("ClientSecret = %q", got.ClientSecret)
+	}
+	if got.BotToken != "" {
+		t.Errorf("BotToken = %q, want empty", got.BotToken)
+	}
+	if got.Permissions != "16" {
+		t.Errorf("Permissions = %q", got.Permissions)
+	}
+	if got.Scopes != "bot applications.commands" {
+		t.Errorf("Scopes = %q", got.Scopes)
+	}
+	if got.RedirectURI != "https://example.com/callback" {
+		t.Errorf("RedirectURI = %q", got.RedirectURI)
+	}
+	if got.Enabled {
+		t.Error("Enabled = true, want false")
+	}
+}
+
+func TestUpdateBotNotFound(t *testing.T) {
+	s := newTestStore(t)
+	err := s.UpdateBot(&model.Bot{ID: 99999, Name: "missing", ClientID: "1", ClientSecret: "2", Scopes: "bot"})
+	if err == nil {
+		t.Fatal("expected error for missing bot")
+	}
+	if err != ErrNotFound {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+}
+
 func TestToggleBotNotFound(t *testing.T) {
 	s := newTestStore(t)
 

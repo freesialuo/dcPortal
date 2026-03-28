@@ -37,6 +37,7 @@ DCPortal helps by providing:
 ### Bot Management
 
 - Add bot (Name / Client ID / Client Secret / Bot Token / Redirect URI / Scopes / Permissions)
+- Edit existing bot settings (name, OAuth2 fields, permissions, and optional Bot Token clearing)
 - Enable/disable bot visibility on the install portal
 - Delete bot and related install/blacklist records
 
@@ -187,6 +188,14 @@ Configure in `/admin`:
 - Redirect URI (must exactly match Discord Developer Portal)
 - Permissions
 - Scopes (`bot` or `bot applications.commands`)
+
+### Edit Bot
+
+In `/admin`, click `Edit` in the bot list to update an existing bot:
+
+- `Bot Name` / `Client ID` / `Redirect URI` / `Permissions` / `Scopes`
+- `Client Secret`: leave blank to keep current value
+- `Bot Token`: leave blank to keep current value, or check `Clear Bot Token`
 
 ### Install Governance
 

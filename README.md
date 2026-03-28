@@ -34,6 +34,7 @@ DCPortal 解决了这几个核心问题：
 ### Bot 管理
 
 - 新增 Bot（Name / Client ID / Client Secret / Bot Token / Redirect URI / Scopes / Permissions）。
+- 编辑已添加 Bot（支持修改名称、OAuth2 配置、权限与可选清空 Bot Token）。
 - 启用/禁用 Bot（控制是否在安装门户展示）。
 - 删除 Bot（同时清理关联安装记录与黑名单记录）。
 
@@ -187,7 +188,15 @@ database:
 - `Permissions`：权限位整数。
 - `Scopes`：例如 `bot` 或 `bot applications.commands`。
 
-### 2) 安装治理动作
+### 2) 编辑 Bot
+
+在 `/admin` 的 Bot 列表中点击 `Edit`，可修改已添加 Bot：
+
+- `Bot Name` / `Client ID` / `Redirect URI` / `Permissions` / `Scopes`
+- `Client Secret`：留空则保留原值
+- `Bot Token`：留空则保留原值，也可勾选 `Clear Bot Token` 清空
+
+### 3) 安装治理动作
 
 对于每条安装记录，可执行：
 

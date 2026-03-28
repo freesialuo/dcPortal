@@ -191,6 +191,27 @@ func (s *Store) GetBot(id int64) (*model.Bot, error) {
 	return b, nil
 }
 
+// UpdateBot updates an existing bot record.
+func (s *Store) UpdateBot(b *model.Bot) error {
+	result, err := s.db.Exec(
+		`UPDATE bots
+		 SET name = ?, client_id = ?, client_secret = ?, bot_token = ?, permissions = ?, scopes = ?, redirect_uri = ?, enabled = ?
+		 WHERE id = ?`,
+		b.Name, b.ClientID, b.ClientSecret, b.BotToken, b.Permissions, b.Scopes, b.RedirectURI, b.Enabled, b.ID,
+	)
+	if err != nil {
+		return fmt.Errorf("update bot: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("update bot rows affected: %w", err)
+	}
+	if rows == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // ToggleBot flips the enabled status of a bot.
 func (s *Store) ToggleBot(id int64) error {
 	result, err := s.db.Exec("UPDATE bots SET enabled = NOT enabled WHERE id = ?", id)

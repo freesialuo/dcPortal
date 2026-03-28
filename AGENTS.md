@@ -67,6 +67,52 @@ fix(portal): block install for blacklisted guild
 docs(readme): expand public deployment guide
 ```
 
+## 分支开发与 PR 合并流程（CI/CD）
+
+默认采用“功能分支 -> 签名提交 -> Pull Request -> CI 通过 -> 合并到 main”的流程。
+
+### 1) 分支策略
+
+- `main` 仅接受 PR 合并，不直接提交功能改动。
+- 新需求从 `main` 拉出功能分支：`feat/*`、`fix/*`、`chore/*`。
+
+### 2) 本地提交流程
+
+- 完成改动后先执行：
+
+```bash
+go test ./...
+go vet ./...
+```
+
+- 使用 GPG 智能卡进行签名提交（必须是 `Verified`）：
+
+```bash
+git commit -S -m "feat(...): ..."
+```
+
+### 3) 推送与 PR
+
+- 推送功能分支到 `origin`。
+- 发起指向 `main` 的 PR。
+- PR 标题必须符合 Conventional Commits（如 `feat(admin): ...`）。
+
+### 4) CI 必须通过
+
+CI 在 `pull_request`、`push(main/tag)`、`merge_group` 触发，至少包含：
+
+- `gofmt` 格式检查
+- `go vet ./...`
+- `go test ./...`
+
+PR 仅在所有必需检查通过后可合并。
+
+### 5) 合并与发布
+
+- 通过评审后合并到 `main`（建议 Squash Merge，保持历史清晰）。
+- 发布时打 `vX.Y.Z` 标签并推送。
+- Tag 流水线负责构建并推送镜像到 `ghcr.io/freesialuo/dcportal`。
+
 ## 发布规范
 
 - 默认发布分支：`main`

@@ -5,10 +5,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 
 	"dcportal/internal/discord"
+	"dcportal/internal/model"
 	"dcportal/internal/store"
 )
 
@@ -79,6 +81,127 @@ func TestAdminCreateBotRequiresFields(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestAdminUpdateBot(t *testing.T) {
+	h, s := setupAdminTest(t)
+
+	bot := &model.Bot{
+		Name:         "OldBot",
+		ClientID:     "12345",
+		ClientSecret: "old-secret",
+		BotToken:     "old-token",
+		Permissions:  "8",
+		Scopes:       "bot",
+		RedirectURI:  "http://localhost:8080/callback",
+		Enabled:      true,
+	}
+	if err := s.CreateBot(bot); err != nil {
+		t.Fatalf("CreateBot: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	form := url.Values{
+		"name":         {"NewBot"},
+		"client_id":    {"67890"},
+		"permissions":  {"16"},
+		"scopes":       {"bot applications.commands"},
+		"redirect_uri": {"https://example.com/callback"},
+	}
+
+	req := httptest.NewRequest("POST", "/admin/bots/"+strconv.FormatInt(bot.ID, 10)+"/update", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusSeeOther)
+	}
+
+	got, err := s.GetBot(bot.ID)
+	if err != nil {
+		t.Fatalf("GetBot: %v", err)
+	}
+	if got.Name != "NewBot" {
+		t.Errorf("Name = %q", got.Name)
+	}
+	if got.ClientID != "67890" {
+		t.Errorf("ClientID = %q", got.ClientID)
+	}
+	if got.ClientSecret != "old-secret" {
+		t.Errorf("ClientSecret should be preserved, got %q", got.ClientSecret)
+	}
+	if got.BotToken != "old-token" {
+		t.Errorf("BotToken should be preserved, got %q", got.BotToken)
+	}
+	if got.Scopes != "bot applications.commands" {
+		t.Errorf("Scopes = %q", got.Scopes)
+	}
+}
+
+func TestAdminUpdateBotNotFound(t *testing.T) {
+	h, _ := setupAdminTest(t)
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	form := url.Values{
+		"name":          {"Bot"},
+		"client_id":     {"123"},
+		"client_secret": {"secret"},
+	}
+	req := httptest.NewRequest("POST", "/admin/bots/999/update", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
+	}
+}
+
+func TestAdminUpdateBotClearToken(t *testing.T) {
+	h, s := setupAdminTest(t)
+
+	bot := &model.Bot{
+		Name:         "OldBot",
+		ClientID:     "12345",
+		ClientSecret: "old-secret",
+		BotToken:     "old-token",
+		Scopes:       "bot",
+		Enabled:      true,
+	}
+	if err := s.CreateBot(bot); err != nil {
+		t.Fatalf("CreateBot: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	form := url.Values{
+		"name":            {"OldBot"},
+		"client_id":       {"12345"},
+		"client_secret":   {"old-secret"},
+		"clear_bot_token": {"1"},
+	}
+	req := httptest.NewRequest("POST", "/admin/bots/"+strconv.FormatInt(bot.ID, 10)+"/update", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusSeeOther)
+	}
+
+	got, err := s.GetBot(bot.ID)
+	if err != nil {
+		t.Fatalf("GetBot: %v", err)
+	}
+	if got.BotToken != "" {
+		t.Errorf("BotToken = %q, want empty", got.BotToken)
 	}
 }
 

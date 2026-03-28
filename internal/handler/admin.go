@@ -31,6 +31,7 @@ func NewAdminHandler(s *store.Store, tmpl *template.Template, dc *discord.Client
 func (h *AdminHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin", h.index)
 	mux.HandleFunc("POST /admin/bots", h.createBot)
+	mux.HandleFunc("POST /admin/bots/{id}/update", h.updateBot)
 	mux.HandleFunc("POST /admin/bots/{id}/toggle", h.toggleBot)
 	mux.HandleFunc("POST /admin/bots/{id}/delete", h.deleteBot)
 	mux.HandleFunc("POST /admin/installs/refresh", h.refreshAllInstalls)
@@ -146,6 +147,74 @@ func (h *AdminHandler) deleteBot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.redirectWithNotice(w, r, "Bot deleted")
+}
+
+func (h *AdminHandler) updateBot(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+
+	existing, err := h.store.GetBot(id)
+	if err != nil {
+		log.Printf("ERROR get bot %d for update: %v", id, err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	if existing == nil {
+		http.Error(w, "Bot not found", http.StatusNotFound)
+		return
+	}
+
+	clientSecret := strings.TrimSpace(r.FormValue("client_secret"))
+	if clientSecret == "" {
+		clientSecret = existing.ClientSecret
+	}
+
+	botToken := strings.TrimSpace(r.FormValue("bot_token"))
+	if botToken == "" {
+		botToken = existing.BotToken
+	}
+	if strings.TrimSpace(r.FormValue("clear_bot_token")) == "1" {
+		botToken = ""
+	}
+
+	bot := &model.Bot{
+		ID:           existing.ID,
+		Name:         strings.TrimSpace(r.FormValue("name")),
+		ClientID:     strings.TrimSpace(r.FormValue("client_id")),
+		ClientSecret: clientSecret,
+		BotToken:     botToken,
+		Permissions:  strings.TrimSpace(r.FormValue("permissions")),
+		Scopes:       strings.TrimSpace(r.FormValue("scopes")),
+		RedirectURI:  strings.TrimSpace(r.FormValue("redirect_uri")),
+		Enabled:      existing.Enabled,
+	}
+
+	if bot.Name == "" || bot.ClientID == "" || bot.ClientSecret == "" {
+		http.Error(w, "Name, Client ID, and Client Secret are required", http.StatusBadRequest)
+		return
+	}
+	if bot.Scopes == "" {
+		bot.Scopes = "bot"
+	}
+
+	if err := h.store.UpdateBot(bot); err != nil {
+		log.Printf("ERROR update bot %d: %v", id, err)
+		if errors.Is(err, store.ErrNotFound) {
+			http.Error(w, "Bot not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "Failed to update bot", http.StatusInternalServerError)
+		return
+	}
+
+	h.redirectWithNotice(w, r, "Bot updated")
 }
 
 func (h *AdminHandler) refreshAllInstalls(w http.ResponseWriter, r *http.Request) {

@@ -133,6 +133,104 @@
 </section>
 
 <section class="card">
+    <h2>Install Links</h2>
+    {{if .Bots}}
+        {{range .Bots}}
+        <div class="card" style="margin-bottom:1rem">
+            <h3>{{.Name}} <span class="muted">(<code>{{.ClientID}}</code>)</span></h3>
+            <form method="POST" action="/admin/bots/{{.ID}}/links" class="form-grid">
+                <div class="form-group">
+                    <label for="link-name-{{.ID}}">Link Name</label>
+                    <input type="text" id="link-name-{{.ID}}" name="link_name" placeholder="Default / Lite / Full Access" required>
+                </div>
+                <div class="form-group">
+                    <label for="link-redirect-uri-{{.ID}}">Redirect URI</label>
+                    <input type="text" id="link-redirect-uri-{{.ID}}" name="redirect_uri" placeholder="https://example.com/callback" value="{{.RedirectURI}}">
+                </div>
+                <div class="form-group">
+                    <label for="link-permissions-{{.ID}}">Permissions</label>
+                    <input type="text" id="link-permissions-{{.ID}}" name="permissions" placeholder="8" value="{{.Permissions}}">
+                </div>
+                <div class="form-group">
+                    <label for="link-scopes-{{.ID}}">Scopes</label>
+                    <input type="text" id="link-scopes-{{.ID}}" name="scopes" placeholder="bot applications.commands" value="{{if .Scopes}}{{.Scopes}}{{else}}bot{{end}}">
+                </div>
+                <button type="submit" class="btn btn-primary btn-sm">Add Install Link</button>
+            </form>
+
+            {{$links := index $.LinksByBot .ID}}
+            {{if $links}}
+            <table style="margin-top:0.75rem">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Scopes</th>
+                        <th>Redirect URI</th>
+                        <th>Status</th>
+                        <th>Install URL</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range $links}}
+                    <tr>
+                        <td>{{.Name}}</td>
+                        <td>{{.Scopes}}</td>
+                        <td class="muted">{{if .RedirectURI}}{{.RedirectURI}}{{else}}—{{end}}</td>
+                        <td>
+                            {{if .Enabled}}
+                                <span class="badge badge-on">Enabled</span>
+                            {{else}}
+                                <span class="badge badge-off">Disabled</span>
+                            {{end}}
+                        </td>
+                        <td><code>/install/{{.ID}}</code></td>
+                        <td class="actions actions-wrap">
+                            <form method="POST" action="/admin/links/{{.ID}}/toggle" class="inline-form">
+                                <button type="submit" class="btn btn-sm">{{if .Enabled}}Disable{{else}}Enable{{end}}</button>
+                            </form>
+                            <details style="display:inline-block">
+                                <summary class="btn btn-sm" style="list-style:none;cursor:pointer">Edit Link</summary>
+                                <form method="POST" action="/admin/links/{{.ID}}/update" class="form-grid" style="margin-top:0.5rem;min-width:320px">
+                                    <div class="form-group">
+                                        <label for="edit-link-name-{{.ID}}">Link Name</label>
+                                        <input type="text" id="edit-link-name-{{.ID}}" name="link_name" value="{{.Name}}" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="edit-link-redirect-uri-{{.ID}}">Redirect URI</label>
+                                        <input type="text" id="edit-link-redirect-uri-{{.ID}}" name="redirect_uri" value="{{.RedirectURI}}">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="edit-link-permissions-{{.ID}}">Permissions</label>
+                                        <input type="text" id="edit-link-permissions-{{.ID}}" name="permissions" value="{{.Permissions}}">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="edit-link-scopes-{{.ID}}">Scopes</label>
+                                        <input type="text" id="edit-link-scopes-{{.ID}}" name="scopes" value="{{.Scopes}}">
+                                    </div>
+                                    <button type="submit" class="btn btn-primary btn-sm">Save Link</button>
+                                </form>
+                            </details>
+                            <form method="POST" action="/admin/links/{{.ID}}/delete" class="inline-form"
+                                  onsubmit="return confirm('Delete link {{.Name}}?')">
+                                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+            {{else}}
+            <p class="muted" style="margin-top:0.75rem">No install links yet for this bot.</p>
+            {{end}}
+        </div>
+        {{end}}
+    {{else}}
+    <p class="muted">Add a bot first, then create one or more install links per bot.</p>
+    {{end}}
+</section>
+
+<section class="card">
     <h2>Installed Guilds</h2>
     <form method="POST" action="/admin/installs/refresh" class="inline-form section-actions">
         <button type="submit" class="btn btn-sm">Refresh All Guild Info</button>
@@ -142,6 +240,7 @@
         <thead>
             <tr>
                 <th>Bot</th>
+                <th>Install Link</th>
                 <th>Guild ID</th>
                 <th>Guild Name</th>
                 <th>Members</th>
@@ -153,6 +252,7 @@
             {{range .Installs}}
             <tr>
                 <td>{{.BotName}}</td>
+                <td>{{if .LinkName}}{{.LinkName}}{{else}}—{{end}}</td>
                 <td><code>{{.GuildID}}</code></td>
                 <td>{{if .GuildName}}{{.GuildName}}{{else}}—{{end}}</td>
                 <td>{{if gt .MemberCount 0}}{{.MemberCount}}{{else}}—{{end}}</td>

@@ -7,6 +7,8 @@ type GuildInstall struct {
 	ID               int64     `json:"id"`
 	BotID            int64     `json:"bot_id"`
 	BotName          string    `json:"bot_name"` // denormalized for display
+	LinkID           int64     `json:"link_id"`
+	LinkName         string    `json:"link_name"`
 	GuildID          string    `json:"guild_id"`
 	GuildName        string    `json:"guild_name"`
 	MemberCount      int       `json:"member_count"`

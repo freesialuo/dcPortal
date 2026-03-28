@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"net/http"
 	"net/http/httptest"
@@ -97,8 +98,8 @@ func TestPortalIndex(t *testing.T) {
 	s := newTestStore2(t)
 	dc, _ := newMockDiscord(t)
 
-	s.CreateBot(&model.Bot{Name: "Bot1", ClientID: "aaa", ClientSecret: "s1", Scopes: "bot", Enabled: true})
-	s.CreateBot(&model.Bot{Name: "Bot2", ClientID: "bbb", ClientSecret: "s2", Scopes: "bot", Enabled: false})
+	s.CreateBot(&model.Bot{Name: "Bot1", ClientID: "aaa", ClientSecret: "s1", Scopes: "bot", RedirectURI: "http://localhost:8080/callback", Enabled: true})
+	s.CreateBot(&model.Bot{Name: "Bot2", ClientID: "bbb", ClientSecret: "s2", Scopes: "bot", RedirectURI: "http://localhost:8080/callback", Enabled: false})
 
 	h := NewPortalHandler(s, testPortalTmpl(), testResultTmpl(), dc)
 
@@ -198,6 +199,7 @@ func TestPortalInstallMissingRedirectURI(t *testing.T) {
 		t.Fatalf("expected 1 default link, got %d", len(links))
 	}
 	links[0].RedirectURI = ""
+	links[0].Enabled = true
 	if err := s.UpdateInstallLink(&links[0]); err != nil {
 		t.Fatalf("UpdateInstallLink: %v", err)
 	}
@@ -429,5 +431,103 @@ func TestPortalCallbackBlockedGuild(t *testing.T) {
 	}
 	if len(installs) != 0 {
 		t.Fatalf("expected 0 installs for blocked guild, got %d", len(installs))
+	}
+}
+
+func TestPortalCallbackDisabledLinkAfterInstall(t *testing.T) {
+	s := newTestStore2(t)
+	dc, _ := newMockDiscord(t)
+
+	bot := &model.Bot{
+		Name:         "Bot1",
+		ClientID:     "123456",
+		ClientSecret: "secret",
+		RedirectURI:  "http://localhost:8080/callback",
+		Scopes:       "bot",
+		Enabled:      true,
+	}
+	if err := s.CreateBot(bot); err != nil {
+		t.Fatalf("CreateBot: %v", err)
+	}
+	links, err := s.ListInstallLinksByBot(bot.ID)
+	if err != nil || len(links) == 0 {
+		t.Fatalf("ListInstallLinksByBot: %v", err)
+	}
+	linkID := links[0].ID
+
+	h := NewPortalHandler(s, testPortalTmpl(), testResultTmpl(), dc)
+
+	origGenState := generateState
+	generateState = func() (string, error) { return "disabled-link-state", nil }
+	t.Cleanup(func() { generateState = origGenState })
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/install/%d", linkID), nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("install redirect status = %d", w.Code)
+	}
+
+	if err := s.ToggleInstallLink(linkID); err != nil {
+		t.Fatalf("ToggleInstallLink: %v", err)
+	}
+
+	req = httptest.NewRequest("GET", "/callback?code=auth-code-123&state=disabled-link-state", nil)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("callback status = %d, want %d", w.Code, http.StatusNotFound)
+	}
+}
+
+func TestPortalCallbackDisabledBotAfterInstall(t *testing.T) {
+	s := newTestStore2(t)
+	dc, _ := newMockDiscord(t)
+
+	bot := &model.Bot{
+		Name:         "Bot1",
+		ClientID:     "123456",
+		ClientSecret: "secret",
+		RedirectURI:  "http://localhost:8080/callback",
+		Scopes:       "bot",
+		Enabled:      true,
+	}
+	if err := s.CreateBot(bot); err != nil {
+		t.Fatalf("CreateBot: %v", err)
+	}
+	links, err := s.ListInstallLinksByBot(bot.ID)
+	if err != nil || len(links) == 0 {
+		t.Fatalf("ListInstallLinksByBot: %v", err)
+	}
+	linkID := links[0].ID
+
+	h := NewPortalHandler(s, testPortalTmpl(), testResultTmpl(), dc)
+
+	origGenState := generateState
+	generateState = func() (string, error) { return "disabled-bot-state", nil }
+	t.Cleanup(func() { generateState = origGenState })
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/install/%d", linkID), nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("install redirect status = %d", w.Code)
+	}
+
+	if err := s.ToggleBot(bot.ID); err != nil {
+		t.Fatalf("ToggleBot: %v", err)
+	}
+
+	req = httptest.NewRequest("GET", "/callback?code=auth-code-123&state=disabled-bot-state", nil)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("callback status = %d, want %d", w.Code, http.StatusNotFound)
 	}
 }

@@ -1,6 +1,7 @@
 package store
 
 import (
+	"database/sql"
 	"path/filepath"
 	"testing"
 
@@ -396,6 +397,99 @@ func TestInstallLinkCRUD(t *testing.T) {
 
 	if err := s.DeleteInstallLink(got.ID); err != nil {
 		t.Fatalf("DeleteInstallLink: %v", err)
+	}
+}
+
+func TestCreateBotDefaultLinkDisabledWithoutRedirect(t *testing.T) {
+	s := newTestStore(t)
+
+	bot := &model.Bot{
+		Name:         "BotNoRedirect",
+		ClientID:     "no-redirect-client",
+		ClientSecret: "secret",
+		Scopes:       "bot",
+		Enabled:      true,
+	}
+	if err := s.CreateBot(bot); err != nil {
+		t.Fatalf("CreateBot: %v", err)
+	}
+	links, err := s.ListInstallLinksByBot(bot.ID)
+	if err != nil {
+		t.Fatalf("ListInstallLinksByBot: %v", err)
+	}
+	if len(links) != 1 {
+		t.Fatalf("expected 1 default link, got %d", len(links))
+	}
+	if links[0].Enabled {
+		t.Fatalf("expected default link disabled when redirect URI is missing")
+	}
+}
+
+func TestMigrateSeedsDisabledDefaultWhenRedirectMissing(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "legacy.db")
+	rawDB, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open raw db: %v", err)
+	}
+	legacySetup := []string{
+		`CREATE TABLE bots (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			client_id TEXT NOT NULL UNIQUE,
+			client_secret TEXT NOT NULL DEFAULT '',
+			bot_token TEXT NOT NULL DEFAULT '',
+			permissions TEXT NOT NULL DEFAULT '',
+			scopes TEXT NOT NULL DEFAULT 'bot',
+			redirect_uri TEXT NOT NULL DEFAULT '',
+			enabled INTEGER NOT NULL DEFAULT 1,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE guild_installs (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			bot_id INTEGER NOT NULL,
+			guild_id TEXT NOT NULL,
+			guild_name TEXT NOT NULL DEFAULT '',
+			installed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE guild_blacklist (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			bot_id INTEGER NOT NULL,
+			guild_id TEXT NOT NULL,
+			guild_name TEXT NOT NULL DEFAULT '',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(bot_id, guild_id)
+		)`,
+		`INSERT INTO bots (name, client_id, client_secret, redirect_uri, enabled) VALUES ('LegacyBot', 'legacy-1', 'secret', '', 1)`,
+	}
+	for _, stmt := range legacySetup {
+		if _, err := rawDB.Exec(stmt); err != nil {
+			rawDB.Close()
+			t.Fatalf("legacy setup exec failed: %v", err)
+		}
+	}
+	if err := rawDB.Close(); err != nil {
+		t.Fatalf("close raw db: %v", err)
+	}
+
+	s, err := New(dbPath)
+	if err != nil {
+		t.Fatalf("New store migrate: %v", err)
+	}
+	defer s.Close()
+
+	bots, err := s.ListBots()
+	if err != nil || len(bots) != 1 {
+		t.Fatalf("ListBots: err=%v len=%d", err, len(bots))
+	}
+	links, err := s.ListInstallLinksByBot(bots[0].ID)
+	if err != nil {
+		t.Fatalf("ListInstallLinksByBot: %v", err)
+	}
+	if len(links) != 1 {
+		t.Fatalf("expected 1 seeded default link, got %d", len(links))
+	}
+	if links[0].Enabled {
+		t.Fatalf("expected seeded default link disabled when redirect URI is missing")
 	}
 }
 

@@ -158,6 +158,11 @@ func (h *PortalHandler) callback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Install link not found", http.StatusNotFound)
 		return
 	}
+	if !installLink.Bot.Enabled || !installLink.Link.Enabled {
+		log.Printf("WARN install link or bot disabled before callback link=%d bot=%d", installLink.Link.ID, installLink.Bot.ID)
+		http.Error(w, "Install link not found", http.StatusNotFound)
+		return
+	}
 	bot := &installLink.Bot
 
 	// Exchange the authorization code for an access token
@@ -177,7 +182,7 @@ func (h *PortalHandler) callback(w http.ResponseWriter, r *http.Request) {
 		bot.ClientID, bot.ClientSecret, code, redirectURI,
 	)
 	if err != nil {
-		log.Printf("ERROR exchange code for bot %d: %v", entry.BotID, err)
+		log.Printf("ERROR exchange code for bot %d: %v", installLink.Bot.ID, err)
 		h.renderResult(w, false, "Failed to complete authorization with Discord. Please try again.", "", "", "")
 		return
 	}
@@ -190,12 +195,12 @@ func (h *PortalHandler) callback(w http.ResponseWriter, r *http.Request) {
 		guildID = tokenResp.Guild.ID
 		guildName = tokenResp.Guild.Name
 		if guildID != "" {
-			isBlocked, err := h.store.IsGuildBlacklisted(entry.BotID, guildID)
+			isBlocked, err := h.store.IsGuildBlacklisted(installLink.Bot.ID, guildID)
 			if err != nil {
 				log.Printf("ERROR check blacklist: %v", err)
 			}
 			if isBlocked {
-				log.Printf("WARN blocked guild install attempt bot=%d guild=%s", entry.BotID, guildID)
+				log.Printf("WARN blocked guild install attempt bot=%d guild=%s", installLink.Bot.ID, guildID)
 				if bot.BotToken != "" {
 					go func() {
 						if err := h.discordClient.LeaveGuild(bot.BotToken, guildID); err != nil {
@@ -222,14 +227,14 @@ func (h *PortalHandler) callback(w http.ResponseWriter, r *http.Request) {
 					memberCount = guild.ApproximateMemberCount
 				}
 			}
-			if _, err := h.store.RecordInstallWithLink(entry.BotID, installLink.Link.ID, installLink.Link.Name, guildID, guildName, memberCount, tokenResp.AccessToken, tokenResp.RefreshToken); err != nil {
+			if _, err := h.store.RecordInstallWithLink(installLink.Bot.ID, installLink.Link.ID, installLink.Link.Name, guildID, guildName, memberCount, tokenResp.AccessToken, tokenResp.RefreshToken); err != nil {
 				log.Printf("ERROR record install: %v", err)
 			}
 		} else {
-			log.Printf("WARN token response missing guild ID for bot %d", entry.BotID)
+			log.Printf("WARN token response missing guild ID for bot %d", installLink.Bot.ID)
 		}
 	} else {
-		log.Printf("WARN token response missing guild info for bot %d", entry.BotID)
+		log.Printf("WARN token response missing guild info for bot %d", installLink.Bot.ID)
 	}
 
 	h.renderResult(w, true, "Bot has been authorized successfully!", bot.Name, guildName, guildID)

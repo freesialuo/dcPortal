@@ -151,7 +151,8 @@ func tableExists(db *sql.DB, tableName string) (bool, error) {
 func ensureDefaultInstallLinks(db *sql.DB) error {
 	_, err := db.Exec(`
 		INSERT INTO install_links (bot_id, name, permissions, scopes, redirect_uri, enabled)
-		SELECT b.id, 'Default', b.permissions, b.scopes, b.redirect_uri, 1
+		SELECT b.id, 'Default', b.permissions, b.scopes, b.redirect_uri,
+		       CASE WHEN TRIM(b.redirect_uri) <> '' THEN 1 ELSE 0 END
 		FROM bots b
 		WHERE NOT EXISTS (
 			SELECT 1 FROM install_links il WHERE il.bot_id = b.id
@@ -189,10 +190,11 @@ func (s *Store) CreateBot(b *model.Bot) error {
 	if err != nil {
 		return fmt.Errorf("get last insert id: %w", err)
 	}
+	defaultLinkEnabled := strings.TrimSpace(b.RedirectURI) != ""
 	if _, err := tx.Exec(
 		`INSERT INTO install_links (bot_id, name, permissions, scopes, redirect_uri, enabled)
-		 VALUES (?, ?, ?, ?, ?, 1)`,
-		id, "Default", b.Permissions, b.Scopes, b.RedirectURI,
+		 VALUES (?, ?, ?, ?, ?, ?)`,
+		id, "Default", b.Permissions, b.Scopes, b.RedirectURI, defaultLinkEnabled,
 	); err != nil {
 		return fmt.Errorf("insert default install link: %w", err)
 	}

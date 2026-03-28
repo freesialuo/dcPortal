@@ -293,6 +293,114 @@ func TestAdminUpdateInstallLink(t *testing.T) {
 	}
 }
 
+func TestAdminToggleInstallLink(t *testing.T) {
+	h, s := setupAdminTest(t)
+
+	bot := &model.Bot{
+		Name:         "Bot1",
+		ClientID:     "12345",
+		ClientSecret: "secret",
+		RedirectURI:  "http://localhost:8080/callback",
+		Enabled:      true,
+	}
+	if err := s.CreateBot(bot); err != nil {
+		t.Fatalf("CreateBot: %v", err)
+	}
+	links, err := s.ListInstallLinksByBot(bot.ID)
+	if err != nil || len(links) == 0 {
+		t.Fatalf("ListInstallLinksByBot: %v", err)
+	}
+	linkID := links[0].ID
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("POST", "/admin/links/"+strconv.FormatInt(linkID, 10)+"/toggle", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusSeeOther)
+	}
+
+	got, err := s.GetInstallLink(linkID)
+	if err != nil {
+		t.Fatalf("GetInstallLink: %v", err)
+	}
+	if got.Enabled {
+		t.Errorf("expected link disabled after toggle")
+	}
+}
+
+func TestAdminToggleInstallLinkNotFound(t *testing.T) {
+	h, _ := setupAdminTest(t)
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("POST", "/admin/links/999/toggle", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusNotFound)
+	}
+}
+
+func TestAdminDeleteInstallLink(t *testing.T) {
+	h, s := setupAdminTest(t)
+
+	bot := &model.Bot{
+		Name:         "Bot1",
+		ClientID:     "12345",
+		ClientSecret: "secret",
+		RedirectURI:  "http://localhost:8080/callback",
+		Enabled:      true,
+	}
+	if err := s.CreateBot(bot); err != nil {
+		t.Fatalf("CreateBot: %v", err)
+	}
+	link := &model.InstallLink{
+		BotID:       bot.ID,
+		Name:        "Extra",
+		Permissions: "8",
+		Scopes:      "bot",
+		RedirectURI: "http://localhost:8080/callback",
+		Enabled:     true,
+	}
+	if err := s.CreateInstallLink(link); err != nil {
+		t.Fatalf("CreateInstallLink: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+	req := httptest.NewRequest("POST", "/admin/links/"+strconv.FormatInt(link.ID, 10)+"/delete", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusSeeOther)
+	}
+	got, err := s.GetInstallLink(link.ID)
+	if err != nil {
+		t.Fatalf("GetInstallLink: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("expected link deleted, got %+v", got)
+	}
+}
+
+func TestAdminDeleteInstallLinkNotFound(t *testing.T) {
+	h, _ := setupAdminTest(t)
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("POST", "/admin/links/999/delete", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusNotFound)
+	}
+}
+
 func TestAdminIndex(t *testing.T) {
 	h, _ := setupAdminTest(t)
 

@@ -1,6 +1,7 @@
 package store
 
 import (
+	"path/filepath"
 	"testing"
 
 	"dcportal/internal/model"
@@ -385,8 +386,56 @@ func TestInstallLinkCRUD(t *testing.T) {
 	if len(links) != 2 {
 		t.Fatalf("expected 2 links (default + custom), got %d", len(links))
 	}
+	allLinks, err := s.ListInstallLinks()
+	if err != nil {
+		t.Fatalf("ListInstallLinks: %v", err)
+	}
+	if len(allLinks) != 2 {
+		t.Fatalf("expected 2 total install links, got %d", len(allLinks))
+	}
 
 	if err := s.DeleteInstallLink(got.ID); err != nil {
 		t.Fatalf("DeleteInstallLink: %v", err)
+	}
+}
+
+func TestMigrateDoesNotRecreateDefaultLinkAfterManualDelete(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "dcportal.db")
+
+	s, err := New(dbPath)
+	if err != nil {
+		t.Fatalf("New store: %v", err)
+	}
+
+	bot := testBot("Bot1", "111")
+	if err := s.CreateBot(bot); err != nil {
+		t.Fatalf("CreateBot: %v", err)
+	}
+	links, err := s.ListInstallLinksByBot(bot.ID)
+	if err != nil {
+		t.Fatalf("ListInstallLinksByBot: %v", err)
+	}
+	if len(links) != 1 {
+		t.Fatalf("expected 1 default link, got %d", len(links))
+	}
+	if err := s.DeleteInstallLink(links[0].ID); err != nil {
+		t.Fatalf("DeleteInstallLink: %v", err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	s2, err := New(dbPath)
+	if err != nil {
+		t.Fatalf("New store reopen: %v", err)
+	}
+	defer s2.Close()
+
+	links, err = s2.ListInstallLinksByBot(bot.ID)
+	if err != nil {
+		t.Fatalf("ListInstallLinksByBot after reopen: %v", err)
+	}
+	if len(links) != 0 {
+		t.Fatalf("expected 0 links after reopen, got %d", len(links))
 	}
 }

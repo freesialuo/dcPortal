@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,7 +22,7 @@ type PortalHandler struct {
 	discordClient *discord.Client
 
 	// In-memory state store for CSRF protection.
-	// Maps state → botID. Entries are single-use.
+	// Maps state → install context. Entries are single-use.
 	stateMu sync.Mutex
 	states  map[string]stateEntry
 }
@@ -31,6 +32,7 @@ const stateTTL = 10 * time.Minute
 type stateEntry struct {
 	BotID     int64
 	LinkID    int64
+	Redirect  string
 	ExpiresAt time.Time
 }
 
@@ -86,6 +88,15 @@ func (h *PortalHandler) install(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Install link not found", http.StatusNotFound)
 		return
 	}
+	redirectURI := strings.TrimSpace(installLink.Link.RedirectURI)
+	if redirectURI == "" {
+		redirectURI = strings.TrimSpace(installLink.Bot.RedirectURI)
+	}
+	if redirectURI == "" {
+		log.Printf("ERROR install link %d missing redirect URI", installLink.Link.ID)
+		http.Error(w, "Install link is misconfigured: missing redirect URI", http.StatusInternalServerError)
+		return
+	}
 
 	// Generate CSRF state and store mapping to link+bot IDs.
 	state, err := generateState()
@@ -100,11 +111,14 @@ func (h *PortalHandler) install(w http.ResponseWriter, r *http.Request) {
 	h.states[state] = stateEntry{
 		BotID:     installLink.Bot.ID,
 		LinkID:    installLink.Link.ID,
+		Redirect:  redirectURI,
 		ExpiresAt: time.Now().Add(stateTTL),
 	}
 	h.stateMu.Unlock()
 
-	http.Redirect(w, r, installLink.Link.OAuthURL(installLink.Bot.ClientID, state), http.StatusTemporaryRedirect)
+	linkForOAuth := installLink.Link
+	linkForOAuth.RedirectURI = redirectURI
+	http.Redirect(w, r, linkForOAuth.OAuthURL(installLink.Bot.ClientID, state), http.StatusTemporaryRedirect)
 }
 
 func (h *PortalHandler) callback(w http.ResponseWriter, r *http.Request) {
@@ -147,8 +161,20 @@ func (h *PortalHandler) callback(w http.ResponseWriter, r *http.Request) {
 	bot := &installLink.Bot
 
 	// Exchange the authorization code for an access token
+	redirectURI := strings.TrimSpace(entry.Redirect)
+	if redirectURI == "" {
+		redirectURI = strings.TrimSpace(installLink.Link.RedirectURI)
+	}
+	if redirectURI == "" {
+		redirectURI = strings.TrimSpace(bot.RedirectURI)
+	}
+	if redirectURI == "" {
+		log.Printf("ERROR callback install link %d missing redirect URI", entry.LinkID)
+		h.renderResult(w, false, "Install link is misconfigured: missing redirect URI.", bot.Name, "", "")
+		return
+	}
 	tokenResp, err := h.discordClient.ExchangeCode(
-		bot.ClientID, bot.ClientSecret, code, installLink.Link.RedirectURI,
+		bot.ClientID, bot.ClientSecret, code, redirectURI,
 	)
 	if err != nil {
 		log.Printf("ERROR exchange code for bot %d: %v", entry.BotID, err)

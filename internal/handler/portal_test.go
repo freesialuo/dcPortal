@@ -176,6 +176,46 @@ func TestPortalInstallDisabledBot(t *testing.T) {
 	}
 }
 
+func TestPortalInstallMissingRedirectURI(t *testing.T) {
+	s := newTestStore2(t)
+	dc, _ := newMockDiscord(t)
+
+	bot := &model.Bot{
+		Name:         "Bot1",
+		ClientID:     "123456",
+		ClientSecret: "secret",
+		Scopes:       "bot",
+		Enabled:      true,
+	}
+	if err := s.CreateBot(bot); err != nil {
+		t.Fatalf("CreateBot: %v", err)
+	}
+	links, err := s.ListInstallLinksByBot(bot.ID)
+	if err != nil {
+		t.Fatalf("ListInstallLinksByBot: %v", err)
+	}
+	if len(links) != 1 {
+		t.Fatalf("expected 1 default link, got %d", len(links))
+	}
+	links[0].RedirectURI = ""
+	if err := s.UpdateInstallLink(&links[0]); err != nil {
+		t.Fatalf("UpdateInstallLink: %v", err)
+	}
+
+	h := NewPortalHandler(s, testPortalTmpl(), testResultTmpl(), dc)
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("GET", "/install/1", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d for missing redirect URI", w.Code, http.StatusInternalServerError)
+	}
+}
+
 func TestPortalCallback(t *testing.T) {
 	s := newTestStore2(t)
 	dc, _ := newMockDiscord(t)

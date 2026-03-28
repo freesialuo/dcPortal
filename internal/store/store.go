@@ -47,6 +47,11 @@ func (s *Store) Close() error {
 }
 
 func migrate(db *sql.DB) error {
+	installLinksTableExisted, err := tableExists(db, "install_links")
+	if err != nil {
+		return fmt.Errorf("check install_links table existence: %w", err)
+	}
+
 	stmts := []string{
 		`CREATE TABLE IF NOT EXISTS bots (
 			id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -121,10 +126,26 @@ func migrate(db *sql.DB) error {
 	if _, err := db.Exec(`ALTER TABLE guild_installs ADD COLUMN link_name TEXT NOT NULL DEFAULT ''`); err != nil && !isDuplicateColumnErr(err) {
 		return fmt.Errorf("add guild_installs.link_name: %w", err)
 	}
-	if err := ensureDefaultInstallLinks(db); err != nil {
-		return fmt.Errorf("ensure default install links: %w", err)
+	// Seed defaults only once when install_links is introduced.
+	// Do not recreate links on every startup if admins intentionally removed all links.
+	if !installLinksTableExisted {
+		if err := ensureDefaultInstallLinks(db); err != nil {
+			return fmt.Errorf("ensure default install links: %w", err)
+		}
 	}
 	return nil
+}
+
+func tableExists(db *sql.DB, tableName string) (bool, error) {
+	var exists int
+	err := db.QueryRow(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1`, tableName).Scan(&exists)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func ensureDefaultInstallLinks(db *sql.DB) error {
@@ -297,6 +318,27 @@ func (s *Store) ListInstallLinksByBot(botID int64) ([]model.InstallLink, error) 
 	)
 	if err != nil {
 		return nil, fmt.Errorf("query install links by bot: %w", err)
+	}
+	defer rows.Close()
+
+	var links []model.InstallLink
+	for rows.Next() {
+		l, err := scanInstallLink(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan install link: %w", err)
+		}
+		links = append(links, *l)
+	}
+	return links, rows.Err()
+}
+
+// ListInstallLinks returns all install links.
+func (s *Store) ListInstallLinks() ([]model.InstallLink, error) {
+	rows, err := s.db.Query(
+		`SELECT ` + installLinkColumns + ` FROM install_links ORDER BY bot_id, id`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query install links: %w", err)
 	}
 	defer rows.Close()
 

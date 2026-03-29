@@ -1,32 +1,36 @@
 {{define "content"}}
-<header>
-    <h1>{{if .Success}}✅{{else}}❌{{end}} {{.Title}}</h1>
+<header class="page-hero page-hero-compact">
+    <div>
+        <p class="eyebrow">Install Result</p>
+        <h1>{{if .Success}}Success{{else}}Failed{{end}}</h1>
+        <p class="subtitle">{{.Title}}</p>
+    </div>
 </header>
 
-<div class="card result-card">
+<section class="card result-card card-elevated">
     <p class="result-message">{{.Message}}</p>
 
     {{if .Success}}
         {{if .BotName}}
         <div class="result-detail">
-            <span class="label">Bot:</span>
+            <span class="label">Bot</span>
             <span>{{.BotName}}</span>
         </div>
         {{end}}
         {{if .GuildName}}
         <div class="result-detail">
-            <span class="label">Guild:</span>
+            <span class="label">Guild</span>
             <span>{{.GuildName}}</span>
         </div>
         {{end}}
         {{if .GuildID}}
         <div class="result-detail">
-            <span class="label">Guild ID:</span>
+            <span class="label">Guild ID</span>
             <code>{{.GuildID}}</code>
         </div>
         {{end}}
     {{end}}
 
-    <a href="/" class="btn btn-primary" style="margin-top: 1.5rem">← Back to Portal</a>
-</div>
+    <a href="/" class="btn btn-primary result-back">Back To Portal</a>
+</section>
 {{end}}

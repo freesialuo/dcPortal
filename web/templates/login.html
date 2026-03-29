@@ -1,15 +1,18 @@
 {{define "content"}}
-<header>
-    <h1>DCPortal</h1>
-    <p class="subtitle">{{.Subtitle}}</p>
+<header class="page-hero page-hero-compact">
+    <div>
+        <p class="eyebrow">Access</p>
+        <h1>DCPortal</h1>
+        <p class="subtitle">{{.Subtitle}}</p>
+    </div>
 </header>
 
-<section class="card auth-card">
+<section class="card auth-card card-elevated">
     <h2>{{.Heading}}</h2>
     {{if .Error}}
     <p class="error-message">{{.Error}}</p>
     {{end}}
-    <form method="POST" action="{{.FormAction}}">
+    <form method="POST" action="{{.FormAction}}" class="form-stack">
         <input type="hidden" name="next" value="{{.Next}}">
         <div class="form-group">
             <label for="token">{{.TokenLabel}}</label>

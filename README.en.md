@@ -38,6 +38,7 @@ DCPortal helps by providing:
 
 - Add bot (Name / Client ID / Client Secret / Bot Token / Redirect URI / Scopes / Permissions)
 - Edit existing bot settings (name, OAuth2 fields, permissions, and optional Bot Token clearing)
+- `Client Secret` / `Bot Token` are write-only in admin UI: overwrite or clear is allowed, read-back is not.
 - Manage install links per bot (one bot can have multiple permission/scope/redirect combinations)
 - Enable/disable bot visibility on the install portal
 - Delete bot and related install/blacklist records
@@ -195,14 +196,15 @@ Configure in `/admin`:
 In `/admin`, click `Edit` in the bot list to update an existing bot:
 
 - `Bot Name` / `Client ID` / `Redirect URI` / `Permissions` / `Scopes`
-- `Client Secret`: leave blank to keep current value
-- `Bot Token`: leave blank to keep current value, or check `Clear Bot Token`
+- `Client Secret`: leave blank to keep current value, fill to overwrite (current value is never shown)
+- `Bot Token`: leave blank to keep current value, fill to overwrite, or check `Clear Bot Token`
 
 ### Install Links (Per Bot)
 
 Each bot can have multiple install links.
 
 - Add link fields: `Link Name`, `Permissions`, `Scopes`, `Redirect URI`
+- Redirect URI must be available: creation is rejected when both link and parent bot redirect URIs are empty.
 - Edit/enable/disable/delete links independently
 - Portal installs are link-based (`/install/{link_id}`)
 - Governance (blacklist, disconnect, leave guild) remains bot-based

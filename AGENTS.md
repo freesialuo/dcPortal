@@ -228,3 +228,46 @@ git push origin vX.Y.Z
 - `/portal`：同一 Bot 多链接展示与安装入口
 - `/callback`：禁用 Bot/Link 后的回调拦截
 - `/admin` 安装治理：Refresh / Revoke / Disconnect / Disconnect+Blacklist
+
+## 当前分支进行中记录（feat/security-robust-ui-upgrade）
+
+以下为尚未合并到 `main`、但已在功能分支落地的重要变更，供下一位 Agent 接续：
+
+### 已完成提交（按时间顺序）
+
+- `d409e91` `feat(security): enforce write-only discord secrets in admin`
+  - 管理页改为 Secret 写入模型：`Client Secret` / `Bot Token` 不回显，仅支持覆盖或清空。
+  - `internal/store` 新增 redacted admin 查询与 patch 更新能力，避免“读出现有 secret 再写回”的路径。
+- `5ae3041` `fix(admin): validate and normalize bot/link inputs`
+  - 增加 `permissions` 数字校验、`redirect_uri` 的 `http/https` 校验、`scopes` 归一化。
+- `c9e80c6` `feat(ui): redesign admin and portal experience`
+  - 重构 `admin/portal/login/result` 页面视觉与布局（含移动端适配）。
+  - 更新中英文 README，补充写入式 Secret 行为说明。
+- `c308f30` `docs(runbook): add ui manual verification checklist`
+  - 新增手工验收清单：`docs/ui-manual-runbook.md`。
+- `627623c` `test(ui): add frontend smoke and interaction coverage`
+  - 新增轻量 UI 烟测：`internal/handler/ui_smoke_test.go`（模板渲染 + CSS 关键选择器 + 响应式规则）。
+
+### 下一位 Agent 必知信息
+
+- 管理页 Secret 规则现在是：
+  - 留空：保持原值
+  - 填新值：覆盖
+  - `clear_bot_token=1`：清空 Bot Token
+- UI 相关改动涉及文件集中在：
+  - `web/templates/*.html`
+  - `web/static/style.css`
+  - `internal/handler/ui_smoke_test.go`
+- 建议先跑自动检查再手动验收：
+  - `go test ./...`
+  - `go vet ./...`
+  - `docs/ui-manual-runbook.md` 中的 10 项 UI 手工检查。
+
+### 签名提交说明（给后续提交者）
+
+- 当前分支最近提交均为签名提交（包含上述 5 个 commit）。
+- 若 `git commit -S` 出现 `gpg: signing failed: Timeout`，默认视为“智能卡触摸未完成”：
+  - 不要改用无签名提交；
+  - 直接再次执行同一条 `git commit -S ...`，等待并完成触摸签名。
+- 在受限环境下 `git log --show-signature` 可能因 keybox 访问受限无法完成信任校验；
+  可用 `git cat-file -p <commit> | rg '^gpgsig '` 快速确认对象内含签名块。

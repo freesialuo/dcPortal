@@ -1,30 +1,33 @@
 {{define "content"}}
-<header>
-    <h1>🤖 DCPortal</h1>
-    <p class="subtitle">Authorized Bot Installation</p>
+<header class="page-hero">
+    <div>
+        <p class="eyebrow">Install Portal</p>
+        <h1>DCPortal</h1>
+        <p class="subtitle">Choose an approved install link for your server. Each link can carry different scopes and permissions.</p>
+    </div>
+    <div class="hero-actions">
+        <a href="/admin" class="btn btn-sm btn-ghost">Admin Console</a>
+        <form method="POST" action="/logout" class="inline-form">
+            <button type="submit" class="btn btn-sm btn-ghost">Logout</button>
+        </form>
+    </div>
 </header>
 
 {{if .Links}}
 <div class="bot-grid">
     {{range .Links}}
-    <div class="card bot-card">
+    <article class="card bot-card card-elevated">
         <h3>{{.BotName}}</h3>
-        <p>{{.Name}}</p>
+        <p class="card-kicker">{{.Name}}</p>
         <p class="muted">Scopes: {{.Scopes}}</p>
+        <p class="muted">Permissions: {{if .Permissions}}{{.Permissions}}{{else}}0{{end}}</p>
         <a href="/install/{{.ID}}" class="btn btn-primary">Install Bot</a>
-    </div>
+    </article>
     {{end}}
 </div>
 {{else}}
-<div class="card">
-    <p class="muted">No bots available for installation.</p>
-</div>
+<section class="card card-elevated">
+    <p class="muted">No bots are currently available for installation.</p>
+</section>
 {{end}}
-
-<footer>
-    <a href="/admin">Go To Admin</a>
-    <form method="POST" action="/logout" class="inline-form">
-        <button type="submit" class="btn btn-sm">Logout</button>
-    </form>
-</footer>
 {{end}}

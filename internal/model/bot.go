@@ -22,6 +22,35 @@ type Bot struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
+// BotAdminView is a redacted bot shape for admin pages.
+// Secret values are never exposed to templates.
+type BotAdminView struct {
+	ID              int64
+	Name            string
+	ClientID        string
+	Permissions     string
+	Scopes          string
+	RedirectURI     string
+	Enabled         bool
+	CreatedAt       time.Time
+	HasClientSecret bool
+	HasBotToken     bool
+}
+
+// BotUpdatePatch updates bot fields without requiring secret read-back.
+// A nil secret/token pointer means "do not change that field".
+type BotUpdatePatch struct {
+	ID            int64
+	Name          string
+	ClientID      string
+	Permissions   string
+	Scopes        string
+	RedirectURI   string
+	ClientSecret  *string
+	BotToken      *string
+	ClearBotToken bool
+}
+
 // OAuthURL builds the Discord OAuth2 authorization URL for this bot.
 // It uses the authorization code grant flow with state for CSRF protection.
 func (b *Bot) OAuthURL(state string) string {

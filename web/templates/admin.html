@@ -1,17 +1,30 @@
 {{define "content"}}
-<header>
-    <h1>🤖 DCPortal Admin</h1>
-    <p class="subtitle">Manage your Discord bots and server links</p>
+<header class="page-hero">
+    <div>
+        <p class="eyebrow">Operations Console</p>
+        <h1>Discord Control Portal</h1>
+        <p class="subtitle">Manage bot access, install links, and guild governance from a single control surface.</p>
+    </div>
+    <div class="hero-actions">
+        <a href="/portal" class="btn btn-sm btn-ghost">Open Install Portal</a>
+        <form method="POST" action="/admin/logout" class="inline-form">
+            <button type="submit" class="btn btn-sm btn-ghost">Logout</button>
+        </form>
+    </div>
 </header>
 
 {{if .Notice}}
-<section class="card">
+<section class="card card-notice">
     <p class="notice-message">{{.Notice}}</p>
 </section>
 {{end}}
 
-<section class="card">
-    <h2>Add Bot</h2>
+<section class="card card-elevated">
+    <div class="card-head">
+        <h2>Add Bot</h2>
+        <p class="muted">Register a Discord application and set baseline install defaults.</p>
+    </div>
+    <p class="muted section-note">Security model: Client Secret and Bot Token are write-only. They can be set, rotated, or cleared, but are never displayed.</p>
     <form method="POST" action="/admin/bots" class="form-grid">
         <div class="form-group">
             <label for="name">Bot Name</label>
@@ -23,22 +36,22 @@
         </div>
         <div class="form-group">
             <label for="client_secret">Client Secret</label>
-            <input type="password" id="client_secret" name="client_secret" placeholder="••••••••" required>
+            <input type="password" id="client_secret" name="client_secret" placeholder="Paste secret" required>
         </div>
         <div class="form-group">
-            <label for="bot_token">Bot Token (for refresh/leave guild)</label>
-            <input type="password" id="bot_token" name="bot_token" placeholder="Bot xxxxx">
+            <label for="bot_token">Bot Token (optional)</label>
+            <input type="password" id="bot_token" name="bot_token" placeholder="Paste bot token to enable refresh/disconnect actions">
         </div>
-        <div class="form-group">
+        <div class="form-group form-span-2">
             <label for="redirect_uri">Redirect URI</label>
-            <input type="text" id="redirect_uri" name="redirect_uri" placeholder="http://localhost:8080/callback">
+            <input type="text" id="redirect_uri" name="redirect_uri" placeholder="https://example.com/callback">
         </div>
         <div class="form-group">
             <label for="permissions">Permissions</label>
             <input type="text" id="permissions" name="permissions" placeholder="8" value="0">
             <div class="field-help">
-                <button type="button" id="open-permissions-calculator" class="btn btn-sm">Open Official Calculator</button>
-                <span class="muted">Use Discord OAuth2 URL Generator to compute and copy the integer permission value.</span>
+                <button type="button" id="open-permissions-calculator" class="btn btn-sm btn-ghost">Open Official Calculator</button>
+                <span class="muted">Use Discord OAuth2 URL Generator to compute the numeric permissions value.</span>
             </div>
         </div>
         <div class="form-group">
@@ -49,252 +62,287 @@
     </form>
 </section>
 
-<section class="card">
-    <h2>Bots & Install Links</h2>
+<section class="card card-elevated">
+    <div class="card-head">
+        <h2>Bots And Install Links</h2>
+        <p class="muted">Each bot can expose multiple install links with different permissions and redirect URIs.</p>
+    </div>
     {{if .Bots}}
-        {{range .Bots}}
-        <div class="bot-block">
-            <div class="bot-block-header">
-                <div>
-                    <h3>{{.Name}}</h3>
-                    <p class="muted"><code>{{.ClientID}}</code> · {{if .RedirectURI}}{{.RedirectURI}}{{else}}No Redirect URI{{end}}</p>
+        <div class="stack-lg">
+            {{range .Bots}}
+            <article class="bot-block">
+                <div class="bot-block-header">
+                    <div>
+                        <h3>{{.Name}}</h3>
+                        <p class="muted">Client ID: <code>{{.ClientID}}</code></p>
+                        <p class="muted">Redirect: {{if .RedirectURI}}{{.RedirectURI}}{{else}}Not set{{end}}</p>
+                    </div>
+                    <div>
+                        {{if .Enabled}}
+                            <span class="badge badge-on">Enabled</span>
+                        {{else}}
+                            <span class="badge badge-off">Disabled</span>
+                        {{end}}
+                    </div>
                 </div>
-                <div>
-                    {{if .Enabled}}
-                        <span class="badge badge-on">Enabled</span>
-                    {{else}}
-                        <span class="badge badge-off">Disabled</span>
-                    {{end}}
-                </div>
-            </div>
 
-            <div class="actions actions-wrap" style="margin-bottom:0.8rem">
-                <form method="POST" action="/admin/bots/{{.ID}}/toggle" class="inline-form">
-                    <button type="submit" class="btn btn-sm">{{if .Enabled}}Disable{{else}}Enable{{end}}</button>
-                </form>
-                <details style="display:inline-block">
-                    <summary class="btn btn-sm" style="list-style:none;cursor:pointer">Edit Bot</summary>
-                    <form method="POST" action="/admin/bots/{{.ID}}/update" class="form-grid" style="margin-top:0.5rem;min-width:320px">
-                        <div class="form-group">
-                            <label for="edit-name-{{.ID}}">Bot Name</label>
-                            <input type="text" id="edit-name-{{.ID}}" name="name" value="{{.Name}}" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="edit-client-id-{{.ID}}">Client ID</label>
-                            <input type="text" id="edit-client-id-{{.ID}}" name="client_id" value="{{.ClientID}}" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="edit-client-secret-{{.ID}}">Client Secret (leave blank to keep)</label>
-                            <input type="password" id="edit-client-secret-{{.ID}}" name="client_secret" placeholder="Leave blank to keep current">
-                        </div>
-                        <div class="form-group">
-                            <label for="edit-bot-token-{{.ID}}">Bot Token (leave blank to keep)</label>
-                            <input type="password" id="edit-bot-token-{{.ID}}" name="bot_token" placeholder="Leave blank to keep current">
-                            <label style="margin-top:0.35rem">
-                                <input type="checkbox" name="clear_bot_token" value="1"> Clear Bot Token
-                            </label>
-                        </div>
-                        <div class="form-group">
-                            <label for="edit-redirect-uri-{{.ID}}">Redirect URI</label>
-                            <input type="text" id="edit-redirect-uri-{{.ID}}" name="redirect_uri" value="{{.RedirectURI}}">
-                        </div>
-                        <div class="form-group">
-                            <label for="edit-permissions-{{.ID}}">Permissions</label>
-                            <input type="text" id="edit-permissions-{{.ID}}" name="permissions" value="{{.Permissions}}">
-                        </div>
-                        <div class="form-group">
-                            <label for="edit-scopes-{{.ID}}">Scopes</label>
-                            <input type="text" id="edit-scopes-{{.ID}}" name="scopes" value="{{.Scopes}}">
-                        </div>
-                        <button type="submit" class="btn btn-primary btn-sm">Save Bot</button>
+                <div class="status-row">
+                    <span class="status-chip {{if .HasClientSecret}}status-chip-ok{{else}}status-chip-warn{{end}}">
+                        Client Secret: {{if .HasClientSecret}}Configured{{else}}Missing{{end}}
+                    </span>
+                    <span class="status-chip {{if .HasBotToken}}status-chip-ok{{else}}status-chip-warn{{end}}">
+                        Bot Token: {{if .HasBotToken}}Configured{{else}}Missing{{end}}
+                    </span>
+                </div>
+
+                <div class="actions actions-wrap actions-pad-bottom">
+                    <form method="POST" action="/admin/bots/{{.ID}}/toggle" class="inline-form">
+                        <button type="submit" class="btn btn-sm">{{if .Enabled}}Disable Bot{{else}}Enable Bot{{end}}</button>
                     </form>
-                </details>
-                <form method="POST" action="/admin/bots/{{.ID}}/delete" class="inline-form"
-                      onsubmit="return confirm('Delete {{.Name}}?')">
-                    <button type="submit" class="btn btn-sm btn-danger">Delete Bot</button>
-                </form>
-            </div>
-
-            <div class="bot-links-section">
-                <h4>Install Links</h4>
-                <form method="POST" action="/admin/bots/{{.ID}}/links" class="form-grid">
-                    <div class="form-group">
-                        <label for="link-name-{{.ID}}">Link Name</label>
-                        <input type="text" id="link-name-{{.ID}}" name="link_name" placeholder="Default / Lite / Full Access" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="link-redirect-uri-{{.ID}}">Redirect URI</label>
-                        <input type="text" id="link-redirect-uri-{{.ID}}" name="redirect_uri" placeholder="https://example.com/callback" value="{{.RedirectURI}}">
-                    </div>
-                    <div class="form-group">
-                        <label for="link-permissions-{{.ID}}">Permissions</label>
-                        <input type="text" id="link-permissions-{{.ID}}" name="permissions" placeholder="8" value="{{.Permissions}}">
-                    </div>
-                    <div class="form-group">
-                        <label for="link-scopes-{{.ID}}">Scopes</label>
-                        <input type="text" id="link-scopes-{{.ID}}" name="scopes" placeholder="bot applications.commands" value="{{if .Scopes}}{{.Scopes}}{{else}}bot{{end}}">
-                    </div>
-                    <button type="submit" class="btn btn-primary btn-sm">Add Link</button>
-                </form>
-
-                {{$links := index $.LinksByBot .ID}}
-                {{if $links}}
-                <div class="link-list">
-                    {{range $links}}
-                    <div class="link-item">
-                        <div class="link-item-main">
-                            <strong>{{.Name}}</strong>
-                            <span class="muted">/install/{{.ID}}</span>
-                            <span class="muted">Scopes: {{.Scopes}}</span>
-                            {{if .Enabled}}
-                                <span class="badge badge-on">Enabled</span>
-                            {{else}}
-                                <span class="badge badge-off">Disabled</span>
-                            {{end}}
-                        </div>
-                        <div class="actions actions-wrap">
-                            <form method="POST" action="/admin/links/{{.ID}}/toggle" class="inline-form">
-                                <button type="submit" class="btn btn-sm">{{if .Enabled}}Disable{{else}}Enable{{end}}</button>
-                            </form>
-                            <details style="display:inline-block">
-                                <summary class="btn btn-sm" style="list-style:none;cursor:pointer">Edit Link</summary>
-                                <form method="POST" action="/admin/links/{{.ID}}/update" class="form-grid" style="margin-top:0.5rem;min-width:320px">
-                                    <div class="form-group">
-                                        <label for="edit-link-name-{{.ID}}">Link Name</label>
-                                        <input type="text" id="edit-link-name-{{.ID}}" name="link_name" value="{{.Name}}" required>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="edit-link-redirect-uri-{{.ID}}">Redirect URI</label>
-                                        <input type="text" id="edit-link-redirect-uri-{{.ID}}" name="redirect_uri" value="{{.RedirectURI}}">
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="edit-link-permissions-{{.ID}}">Permissions</label>
-                                        <input type="text" id="edit-link-permissions-{{.ID}}" name="permissions" value="{{.Permissions}}">
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="edit-link-scopes-{{.ID}}">Scopes</label>
-                                        <input type="text" id="edit-link-scopes-{{.ID}}" name="scopes" value="{{.Scopes}}">
-                                    </div>
-                                    <button type="submit" class="btn btn-primary btn-sm">Save Link</button>
-                                </form>
-                            </details>
-                            <form method="POST" action="/admin/links/{{.ID}}/delete" class="inline-form"
-                                  onsubmit="return confirm('Delete link {{.Name}}?')">
-                                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
-                            </form>
-                        </div>
-                    </div>
-                    {{end}}
+                    <details class="expander">
+                        <summary class="btn btn-sm btn-ghost">Edit Bot</summary>
+                        <form method="POST" action="/admin/bots/{{.ID}}/update" class="form-grid form-grid-compact">
+                            <div class="form-group">
+                                <label for="edit-name-{{.ID}}">Bot Name</label>
+                                <input type="text" id="edit-name-{{.ID}}" name="name" value="{{.Name}}" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-client-id-{{.ID}}">Client ID</label>
+                                <input type="text" id="edit-client-id-{{.ID}}" name="client_id" value="{{.ClientID}}" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-client-secret-{{.ID}}">Client Secret (optional overwrite)</label>
+                                <input type="password" id="edit-client-secret-{{.ID}}" name="client_secret" placeholder="Paste new value to rotate">
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-bot-token-{{.ID}}">Bot Token (optional overwrite)</label>
+                                <input type="password" id="edit-bot-token-{{.ID}}" name="bot_token" placeholder="Paste new value to rotate">
+                            </div>
+                            <div class="form-group form-span-2">
+                                <label class="checkbox-inline">
+                                    <input type="checkbox" name="clear_bot_token" value="1"> Clear Bot Token
+                                </label>
+                            </div>
+                            <div class="form-group form-span-2">
+                                <label for="edit-redirect-uri-{{.ID}}">Redirect URI</label>
+                                <input type="text" id="edit-redirect-uri-{{.ID}}" name="redirect_uri" value="{{.RedirectURI}}">
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-permissions-{{.ID}}">Permissions</label>
+                                <input type="text" id="edit-permissions-{{.ID}}" name="permissions" value="{{.Permissions}}">
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-scopes-{{.ID}}">Scopes</label>
+                                <input type="text" id="edit-scopes-{{.ID}}" name="scopes" value="{{.Scopes}}">
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-sm">Save Bot</button>
+                        </form>
+                    </details>
+                    <form method="POST" action="/admin/bots/{{.ID}}/delete" class="inline-form" onsubmit="return confirm('Delete {{.Name}}?')">
+                        <button type="submit" class="btn btn-sm btn-danger">Delete Bot</button>
+                    </form>
                 </div>
-                {{else}}
-                <p class="muted" style="margin-top:0.75rem">No install links yet for this bot.</p>
-                {{end}}
-            </div>
+
+                <section class="subpanel">
+                    <h4>Install Links</h4>
+                    <form method="POST" action="/admin/bots/{{.ID}}/links" class="form-grid form-grid-compact">
+                        <div class="form-group">
+                            <label for="link-name-{{.ID}}">Link Name</label>
+                            <input type="text" id="link-name-{{.ID}}" name="link_name" placeholder="Default / Lite / Full Access" required>
+                        </div>
+                        <div class="form-group form-span-2">
+                            <label for="link-redirect-uri-{{.ID}}">Redirect URI</label>
+                            <input type="text" id="link-redirect-uri-{{.ID}}" name="redirect_uri" placeholder="https://example.com/callback" value="{{.RedirectURI}}">
+                        </div>
+                        <div class="form-group">
+                            <label for="link-permissions-{{.ID}}">Permissions</label>
+                            <input type="text" id="link-permissions-{{.ID}}" name="permissions" placeholder="8" value="{{.Permissions}}">
+                        </div>
+                        <div class="form-group">
+                            <label for="link-scopes-{{.ID}}">Scopes</label>
+                            <input type="text" id="link-scopes-{{.ID}}" name="scopes" placeholder="bot applications.commands" value="{{if .Scopes}}{{.Scopes}}{{else}}bot{{end}}">
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm">Add Link</button>
+                    </form>
+
+                    {{$links := index $.LinksByBot .ID}}
+                    {{if $links}}
+                    <div class="link-list">
+                        {{range $links}}
+                        <article class="link-item">
+                            <div class="link-item-main">
+                                <strong>{{.Name}}</strong>
+                                <code>/install/{{.ID}}</code>
+                                <span class="muted">Scopes: {{.Scopes}}</span>
+                                {{if .Enabled}}
+                                    <span class="badge badge-on">Enabled</span>
+                                {{else}}
+                                    <span class="badge badge-off">Disabled</span>
+                                {{end}}
+                            </div>
+                            <div class="actions actions-wrap">
+                                <form method="POST" action="/admin/links/{{.ID}}/toggle" class="inline-form">
+                                    <button type="submit" class="btn btn-sm">{{if .Enabled}}Disable{{else}}Enable{{end}}</button>
+                                </form>
+                                <button type="button" class="btn btn-sm btn-ghost copy-link-btn" data-install-path="/install/{{.ID}}">Copy Link URL</button>
+                                <details class="expander">
+                                    <summary class="btn btn-sm btn-ghost">Edit Link</summary>
+                                    <form method="POST" action="/admin/links/{{.ID}}/update" class="form-grid form-grid-compact">
+                                        <div class="form-group">
+                                            <label for="edit-link-name-{{.ID}}">Link Name</label>
+                                            <input type="text" id="edit-link-name-{{.ID}}" name="link_name" value="{{.Name}}" required>
+                                        </div>
+                                        <div class="form-group form-span-2">
+                                            <label for="edit-link-redirect-uri-{{.ID}}">Redirect URI</label>
+                                            <input type="text" id="edit-link-redirect-uri-{{.ID}}" name="redirect_uri" value="{{.RedirectURI}}">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="edit-link-permissions-{{.ID}}">Permissions</label>
+                                            <input type="text" id="edit-link-permissions-{{.ID}}" name="permissions" value="{{.Permissions}}">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="edit-link-scopes-{{.ID}}">Scopes</label>
+                                            <input type="text" id="edit-link-scopes-{{.ID}}" name="scopes" value="{{.Scopes}}">
+                                        </div>
+                                        <button type="submit" class="btn btn-primary btn-sm">Save Link</button>
+                                    </form>
+                                </details>
+                                <form method="POST" action="/admin/links/{{.ID}}/delete" class="inline-form" onsubmit="return confirm('Delete link {{.Name}}?')">
+                                    <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                                </form>
+                            </div>
+                        </article>
+                        {{end}}
+                    </div>
+                    {{else}}
+                    <p class="muted section-note">No install links configured yet.</p>
+                    {{end}}
+                </section>
+            </article>
+            {{end}}
         </div>
-        {{end}}
     {{else}}
     <p class="muted">No bots configured yet.</p>
     {{end}}
 </section>
 
-<section class="card">
-    <h2>Installed Guilds</h2>
-    <form method="POST" action="/admin/installs/refresh" class="inline-form section-actions">
-        <button type="submit" class="btn btn-sm">Refresh All Guild Info</button>
-    </form>
+<section class="card card-elevated">
+    <div class="card-head">
+        <h2>Installed Guilds</h2>
+        <form method="POST" action="/admin/installs/refresh" class="inline-form">
+            <button type="submit" class="btn btn-sm">Refresh All Guild Info</button>
+        </form>
+    </div>
     {{if .Installs}}
-    <table>
-        <thead>
-            <tr>
-                <th>Bot</th>
-                <th>Install Link</th>
-                <th>Guild ID</th>
-                <th>Guild Name</th>
-                <th>Members</th>
-                <th>Installed At</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {{range .Installs}}
-            <tr>
-                <td>{{.BotName}}</td>
-                <td>{{if .LinkName}}{{.LinkName}}{{else}}—{{end}}</td>
-                <td><code>{{.GuildID}}</code></td>
-                <td>{{if .GuildName}}{{.GuildName}}{{else}}—{{end}}</td>
-                <td>{{if gt .MemberCount 0}}{{.MemberCount}}{{else}}—{{end}}</td>
-                <td class="muted">{{.InstalledAt.Format "2006-01-02 15:04"}}</td>
-                <td class="actions actions-wrap">
-                    <form method="POST" action="/admin/installs/{{.ID}}/refresh" class="inline-form">
-                        <button type="submit" class="btn btn-sm">Refresh</button>
-                    </form>
-                    <form method="POST" action="/admin/installs/{{.ID}}/revoke" class="inline-form"
-                          onsubmit="return confirm('Revoke saved OAuth2 authorization for this install?')">
-                        <button type="submit" class="btn btn-sm">Revoke OAuth2</button>
-                    </form>
-                    <form method="POST" action="/admin/installs/{{.ID}}/disconnect" class="inline-form"
-                          onsubmit="return confirm('Disconnect this guild? Bot will attempt to leave the server.')">
-                        <button type="submit" class="btn btn-sm btn-danger">Disconnect</button>
-                    </form>
-                    <form method="POST" action="/admin/installs/{{.ID}}/disconnect-blacklist" class="inline-form"
-                          onsubmit="return confirm('Disconnect and blacklist this guild? Future installs to this guild will be denied.')">
-                        <button type="submit" class="btn btn-sm btn-danger">Disconnect + Blacklist</button>
-                    </form>
-                </td>
-            </tr>
-            {{end}}
-        </tbody>
-    </table>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Bot</th>
+                    <th>Install Link</th>
+                    <th>Guild ID</th>
+                    <th>Guild Name</th>
+                    <th>Members</th>
+                    <th>Installed At</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Installs}}
+                <tr>
+                    <td>{{.BotName}}</td>
+                    <td>{{if .LinkName}}{{.LinkName}}{{else}}—{{end}}</td>
+                    <td><code>{{.GuildID}}</code></td>
+                    <td>{{if .GuildName}}{{.GuildName}}{{else}}—{{end}}</td>
+                    <td>{{if gt .MemberCount 0}}{{.MemberCount}}{{else}}—{{end}}</td>
+                    <td class="muted">{{.InstalledAt.Format "2006-01-02 15:04"}}</td>
+                    <td class="actions actions-wrap">
+                        <form method="POST" action="/admin/installs/{{.ID}}/refresh" class="inline-form">
+                            <button type="submit" class="btn btn-sm">Refresh</button>
+                        </form>
+                        <form method="POST" action="/admin/installs/{{.ID}}/revoke" class="inline-form" onsubmit="return confirm('Revoke saved OAuth2 authorization for this install?')">
+                            <button type="submit" class="btn btn-sm">Revoke OAuth2</button>
+                        </form>
+                        <form method="POST" action="/admin/installs/{{.ID}}/disconnect" class="inline-form" onsubmit="return confirm('Disconnect this guild? Bot will attempt to leave the server.')">
+                            <button type="submit" class="btn btn-sm btn-danger">Disconnect</button>
+                        </form>
+                        <form method="POST" action="/admin/installs/{{.ID}}/disconnect-blacklist" class="inline-form" onsubmit="return confirm('Disconnect and blacklist this guild? Future installs to this guild will be denied.')">
+                            <button type="submit" class="btn btn-sm btn-danger">Disconnect + Blacklist</button>
+                        </form>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
     {{else}}
     <p class="muted">No active installs yet.</p>
     {{end}}
 </section>
 
 {{if .Blacklist}}
-<section class="card">
+<section class="card card-elevated">
     <h2>Guild Blacklist</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>Bot</th>
-                <th>Guild ID</th>
-                <th>Guild Name</th>
-                <th>Blocked At</th>
-            </tr>
-        </thead>
-        <tbody>
-            {{range .Blacklist}}
-            <tr>
-                <td>{{.BotName}}</td>
-                <td><code>{{.GuildID}}</code></td>
-                <td>{{if .GuildName}}{{.GuildName}}{{else}}—{{end}}</td>
-                <td class="muted">{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
-            </tr>
-            {{end}}
-        </tbody>
-    </table>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Bot</th>
+                    <th>Guild ID</th>
+                    <th>Guild Name</th>
+                    <th>Blocked At</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Blacklist}}
+                <tr>
+                    <td>{{.BotName}}</td>
+                    <td><code>{{.GuildID}}</code></td>
+                    <td>{{if .GuildName}}{{.GuildName}}{{else}}—{{end}}</td>
+                    <td class="muted">{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
 </section>
 {{end}}
 
-<footer>
-    <a href="/portal">View Install Portal</a>
-    <form method="POST" action="/admin/logout" class="inline-form">
-        <button type="submit" class="btn btn-sm">Logout</button>
-    </form>
-</footer>
 <script>
 (() => {
     const openBtn = document.getElementById("open-permissions-calculator");
     const clientIDInput = document.getElementById("client_id");
-    if (!openBtn || !clientIDInput) return;
 
-    openBtn.addEventListener("click", () => {
-        const id = (clientIDInput.value || "").trim();
-        const isNumericID = /^[0-9]{16,22}$/.test(id);
-        const url = isNumericID
-            ? `https://discord.com/developers/applications/${id}/oauth2/url-generator`
-            : "https://discord.com/developers/applications";
-        window.open(url, "_blank", "noopener,noreferrer");
+    if (openBtn && clientIDInput) {
+        openBtn.addEventListener("click", () => {
+            const id = (clientIDInput.value || "").trim();
+            const isNumericID = /^[0-9]{16,22}$/.test(id);
+            const url = isNumericID
+                ? `https://discord.com/developers/applications/${id}/oauth2/url-generator`
+                : "https://discord.com/developers/applications";
+            window.open(url, "_blank", "noopener,noreferrer");
+        });
+    }
+
+    const copyButtons = document.querySelectorAll(".copy-link-btn");
+    copyButtons.forEach((button) => {
+        button.addEventListener("click", async () => {
+            const path = button.getAttribute("data-install-path");
+            if (!path) {
+                return;
+            }
+            const fullURL = `${window.location.origin}${path}`;
+            try {
+                await navigator.clipboard.writeText(fullURL);
+                const originalText = button.textContent;
+                button.textContent = "Copied";
+                window.setTimeout(() => {
+                    button.textContent = originalText;
+                }, 1200);
+            } catch (_) {
+                window.prompt("Copy this install URL", fullURL);
+            }
+        });
     });
 })();
 </script>

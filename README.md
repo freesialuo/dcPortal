@@ -35,6 +35,7 @@ DCPortal 解决了这几个核心问题：
 
 - 新增 Bot（Name / Client ID / Client Secret / Bot Token / Redirect URI / Scopes / Permissions）。
 - 编辑已添加 Bot（支持修改名称、OAuth2 配置、权限与可选清空 Bot Token）。
+- 管理后台中的 `Client Secret` / `Bot Token` 采用写入式模型：只可覆盖或清空，不可回显读取。
 - 按 Bot 管理多个安装链接（同一 Bot 可配置多组权限/Scope/Redirect URI）。
 - 启用/禁用 Bot（控制是否在安装门户展示）。
 - 删除 Bot（同时清理关联安装记录与黑名单记录）。
@@ -194,8 +195,8 @@ database:
 在 `/admin` 的 Bot 列表中点击 `Edit`，可修改已添加 Bot：
 
 - `Bot Name` / `Client ID` / `Redirect URI` / `Permissions` / `Scopes`
-- `Client Secret`：留空则保留原值
-- `Bot Token`：留空则保留原值，也可勾选 `Clear Bot Token` 清空
+- `Client Secret`：留空则保留原值；若填写则覆盖（不会回显当前值）
+- `Bot Token`：留空则保留原值；若填写则覆盖，也可勾选 `Clear Bot Token` 清空
 
 ### 3) 管理安装链接（每个 Bot 可多个）
 
@@ -203,6 +204,7 @@ database:
 
 - `Link Name`：区分不同安装入口（如 Default / Lite / Full Access）。
 - `Permissions` / `Scopes` / `Redirect URI`：按链接独立配置。
+- `Redirect URI` 必须可用：若链接与所属 Bot 都未配置 `Redirect URI`，创建会被拒绝。
 - 支持对链接执行编辑、启用/禁用、删除。
 - 安装入口按链接路由：`/install/{link_id}`。
 

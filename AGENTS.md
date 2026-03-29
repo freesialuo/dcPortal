@@ -154,3 +154,77 @@ git push origin vX.Y.Z
 - 新增后台操作入口或治理动作
 - 路由、部署方式、镜像地址变化
 - 版本发布流程变化
+
+## 近期变更记录（Review Log）
+
+以下为已合并到 `main` 的近期变更摘要（按 PR 顺序）：
+
+### PR #2 `feat-admin-bot-management-ci-pr-gate`
+
+- 管理后台新增 Bot 编辑能力（保留/清空敏感字段逻辑）。
+- 新增 CI/PR 合并流程规范与校验项。
+- 同步更新中英文 README 与 AGENTS 协作流程说明。
+
+### PR #4 `chore-ci-pr-title-edited-trigger`
+
+- CI `pull_request` 触发类型补充 `edited`，确保 PR 标题修改后重新校验 Conventional Commits。
+
+### PR #5 `feat(portal): split bot install links`
+
+- 引入 `install_links` 模型与迁移，支持“一个 Bot 对应多个安装链接（不同权限/Scopes/Redirect）”。
+- Portal 安装入口改为按链接安装（`/install/{link_id}`）。
+- 治理动作（黑名单、断开、退服）保持 Bot 维度。
+- 补充 store/handler 测试，覆盖链接增删改查与回调流程。
+- 后续评审修复已纳入：
+  - 默认链接种子逻辑仅首次迁移执行；
+  - 无 Redirect URI 场景默认链接禁用；
+  - callback 增加 link/bot 启用状态复检；
+  - 增补 links toggle/delete handler 测试。
+
+### PR #6 `feat(ui): regroup admin bots and links into per-bot blocks`
+
+- 管理后台 UI 改为按 Bot 分块展示，每个 Bot 下内聚显示 Links 列表与操作入口。
+- 页面结构更贴合“Bot 主体 + Link 从属”的心智模型，减少跨区操作成本。
+
+## Agent 交接速记（必读）
+
+以下内容是给下一位 Agent 的高优先级上下文，建议开始开发前先阅读：
+
+### 当前核心模型（2026-03）
+
+- 安装入口已从“按 Bot”升级为“按 Install Link”：
+  - 入口路由：`/install/{link_id}`
+  - 数据关系：`bot (1) -> (N) install_links`
+- 服务器治理动作仍按 `bot_id` 生效：
+  - 黑名单（`guild_blacklist`）
+  - 断开连接 / 退服
+  - 刷新 Guild 信息
+
+### 关键不变量（避免回归）
+
+- `callback` 阶段必须复检 `bot.enabled` 与 `install_link.enabled`。
+- `callback` 内记录安装与黑名单判断要以“当前查到的 link 归属 bot”作为准，不依赖旧 state 中的 bot 作为最终来源。
+- 默认链接种子逻辑仅在 `install_links` 表首次引入时执行；不要在每次启动自动补回被管理员删除的最后一个 link。
+- 当 Redirect URI 为空时，默认 link 应禁用，避免出现可点击但必失败的安装入口。
+
+### Redirect URI 规则
+
+- 授权跳转与 token exchange 必须使用同一份 redirect URI。
+- install 时若 link.redirect_uri 为空，允许回退到 bot.redirect_uri；两者都为空时应拒绝安装（配置错误）。
+
+### 数据迁移注意事项
+
+- `internal/store/store.go` 包含向后兼容迁移逻辑；修改字段/表时先考虑旧库平滑升级。
+- 涉及默认值策略时，优先保证“不破坏管理员显式操作结果”（例如管理员手动删除/禁用）。
+
+### CI / PR 注意
+
+- PR 标题必须符合 Conventional Commits（`feat(...)`, `fix(...)`, `chore(...)`...）。
+- `.github/workflows/ci.yml` 已对 `pull_request.edited` 触发校验，改 PR 标题会重新跑校验。
+
+### 建议优先人工验收路径
+
+- `/admin`：Bot 编辑、Link 增删改、Link 启用/禁用
+- `/portal`：同一 Bot 多链接展示与安装入口
+- `/callback`：禁用 Bot/Link 后的回调拦截
+- `/admin` 安装治理：Refresh / Revoke / Disconnect / Disconnect+Blacklist

@@ -84,6 +84,55 @@ func TestAdminCreateBotRequiresFields(t *testing.T) {
 	}
 }
 
+func TestAdminCreateBotRejectsInvalidPermissions(t *testing.T) {
+	h, _ := setupAdminTest(t)
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	form := url.Values{
+		"name":          {"MyBot"},
+		"client_id":     {"12345"},
+		"client_secret": {"my-secret"},
+		"permissions":   {"read-write"},
+		"scopes":        {"bot"},
+	}
+
+	req := httptest.NewRequest("POST", "/admin/bots", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestAdminCreateBotRejectsInvalidRedirectURI(t *testing.T) {
+	h, _ := setupAdminTest(t)
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	form := url.Values{
+		"name":          {"MyBot"},
+		"client_id":     {"12345"},
+		"client_secret": {"my-secret"},
+		"redirect_uri":  {"javascript:alert(1)"},
+		"permissions":   {"8"},
+		"scopes":        {"bot"},
+	}
+
+	req := httptest.NewRequest("POST", "/admin/bots", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
 func TestAdminUpdateBot(t *testing.T) {
 	h, s := setupAdminTest(t)
 
@@ -205,6 +254,47 @@ func TestAdminUpdateBotClearToken(t *testing.T) {
 	}
 }
 
+func TestAdminUpdateBotNormalizesScopes(t *testing.T) {
+	h, s := setupAdminTest(t)
+
+	bot := &model.Bot{
+		Name:         "OldBot",
+		ClientID:     "12345",
+		ClientSecret: "old-secret",
+		BotToken:     "old-token",
+		Scopes:       "bot",
+		Enabled:      true,
+	}
+	if err := s.CreateBot(bot); err != nil {
+		t.Fatalf("CreateBot: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	form := url.Values{
+		"name":      {"OldBot"},
+		"client_id": {"12345"},
+		"scopes":    {"  bot   applications.commands  "},
+	}
+	req := httptest.NewRequest("POST", "/admin/bots/"+strconv.FormatInt(bot.ID, 10)+"/update", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusSeeOther)
+	}
+
+	got, err := s.GetBot(bot.ID)
+	if err != nil {
+		t.Fatalf("GetBot: %v", err)
+	}
+	if got.Scopes != "bot applications.commands" {
+		t.Fatalf("Scopes = %q, want %q", got.Scopes, "bot applications.commands")
+	}
+}
+
 func TestAdminUpdateBotRotateSecrets(t *testing.T) {
 	h, s := setupAdminTest(t)
 
@@ -290,6 +380,38 @@ func TestAdminCreateInstallLink(t *testing.T) {
 	}
 	if len(links) != 2 {
 		t.Fatalf("expected default link + new link, got %d", len(links))
+	}
+}
+
+func TestAdminCreateInstallLinkRejectsInvalidRedirectURI(t *testing.T) {
+	h, s := setupAdminTest(t)
+
+	bot := &model.Bot{
+		Name:         "Bot1",
+		ClientID:     "12345",
+		ClientSecret: "secret",
+		Enabled:      true,
+	}
+	if err := s.CreateBot(bot); err != nil {
+		t.Fatalf("CreateBot: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	form := url.Values{
+		"link_name":    {"Unsafe"},
+		"permissions":  {"8"},
+		"scopes":       {"bot"},
+		"redirect_uri": {"file:///tmp/redirect"},
+	}
+	req := httptest.NewRequest("POST", "/admin/bots/"+strconv.FormatInt(bot.ID, 10)+"/links", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusBadRequest)
 	}
 }
 

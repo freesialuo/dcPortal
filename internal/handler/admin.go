@@ -127,7 +127,7 @@ func (h *AdminHandler) createBot(w http.ResponseWriter, r *http.Request) {
 		ClientSecret: strings.TrimSpace(r.FormValue("client_secret")),
 		BotToken:     strings.TrimSpace(r.FormValue("bot_token")),
 		Permissions:  strings.TrimSpace(r.FormValue("permissions")),
-		Scopes:       strings.TrimSpace(r.FormValue("scopes")),
+		Scopes:       normalizeScopes(r.FormValue("scopes")),
 		RedirectURI:  strings.TrimSpace(r.FormValue("redirect_uri")),
 		Enabled:      true,
 	}
@@ -136,8 +136,13 @@ func (h *AdminHandler) createBot(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Name, Client ID, and Client Secret are required", http.StatusBadRequest)
 		return
 	}
-	if bot.Scopes == "" {
-		bot.Scopes = "bot"
+	if err := validatePermissions(bot.Permissions); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := validateRedirectURI(bot.RedirectURI); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	if err := h.store.CreateBot(bot); err != nil {
@@ -208,7 +213,7 @@ func (h *AdminHandler) updateBot(w http.ResponseWriter, r *http.Request) {
 		Name:          strings.TrimSpace(r.FormValue("name")),
 		ClientID:      strings.TrimSpace(r.FormValue("client_id")),
 		Permissions:   strings.TrimSpace(r.FormValue("permissions")),
-		Scopes:        strings.TrimSpace(r.FormValue("scopes")),
+		Scopes:        normalizeScopes(r.FormValue("scopes")),
 		RedirectURI:   strings.TrimSpace(r.FormValue("redirect_uri")),
 		ClearBotToken: clearBotToken,
 	}
@@ -223,8 +228,13 @@ func (h *AdminHandler) updateBot(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Name and Client ID are required", http.StatusBadRequest)
 		return
 	}
-	if patch.Scopes == "" {
-		patch.Scopes = "bot"
+	if err := validatePermissions(patch.Permissions); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := validateRedirectURI(patch.RedirectURI); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	if err := h.store.UpdateBotPatch(patch); err != nil {
@@ -266,7 +276,7 @@ func (h *AdminHandler) createInstallLink(w http.ResponseWriter, r *http.Request)
 		BotID:       botID,
 		Name:        strings.TrimSpace(r.FormValue("link_name")),
 		Permissions: strings.TrimSpace(r.FormValue("permissions")),
-		Scopes:      strings.TrimSpace(r.FormValue("scopes")),
+		Scopes:      normalizeScopes(r.FormValue("scopes")),
 		RedirectURI: strings.TrimSpace(r.FormValue("redirect_uri")),
 		Enabled:     true,
 	}
@@ -274,11 +284,16 @@ func (h *AdminHandler) createInstallLink(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "Link name is required", http.StatusBadRequest)
 		return
 	}
-	if link.Scopes == "" {
-		link.Scopes = "bot"
-	}
 	if link.RedirectURI == "" {
 		link.RedirectURI = bot.RedirectURI
+	}
+	if err := validatePermissions(link.Permissions); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := validateRedirectURI(link.RedirectURI); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	if err := h.store.CreateInstallLink(link); err != nil {
@@ -317,7 +332,7 @@ func (h *AdminHandler) updateInstallLink(w http.ResponseWriter, r *http.Request)
 		BotID:       existing.BotID,
 		Name:        strings.TrimSpace(r.FormValue("link_name")),
 		Permissions: strings.TrimSpace(r.FormValue("permissions")),
-		Scopes:      strings.TrimSpace(r.FormValue("scopes")),
+		Scopes:      normalizeScopes(r.FormValue("scopes")),
 		RedirectURI: strings.TrimSpace(r.FormValue("redirect_uri")),
 		Enabled:     existing.Enabled,
 	}
@@ -325,8 +340,13 @@ func (h *AdminHandler) updateInstallLink(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "Link name is required", http.StatusBadRequest)
 		return
 	}
-	if updated.Scopes == "" {
-		updated.Scopes = "bot"
+	if err := validatePermissions(updated.Permissions); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := validateRedirectURI(updated.RedirectURI); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	if err := h.store.UpdateInstallLink(updated); err != nil {

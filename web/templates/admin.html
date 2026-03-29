@@ -50,142 +50,109 @@
 </section>
 
 <section class="card">
-    <h2>Bot List</h2>
+    <h2>Bots & Install Links</h2>
     {{if .Bots}}
-    <table>
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Client ID</th>
-                <th>Scopes</th>
-                <th>Redirect URI</th>
-                <th>Status</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {{range .Bots}}
-            <tr>
-                <td>{{.Name}}</td>
-                <td><code>{{.ClientID}}</code></td>
-                <td>{{.Scopes}}</td>
-                <td class="muted">{{if .RedirectURI}}{{.RedirectURI}}{{else}}—{{end}}</td>
-                <td>
+        {{range .Bots}}
+        <div class="bot-block">
+            <div class="bot-block-header">
+                <div>
+                    <h3>{{.Name}}</h3>
+                    <p class="muted"><code>{{.ClientID}}</code> · {{if .RedirectURI}}{{.RedirectURI}}{{else}}No Redirect URI{{end}}</p>
+                </div>
+                <div>
                     {{if .Enabled}}
                         <span class="badge badge-on">Enabled</span>
                     {{else}}
                         <span class="badge badge-off">Disabled</span>
                     {{end}}
-                </td>
-                <td class="actions">
-                    <form method="POST" action="/admin/bots/{{.ID}}/toggle" style="display:inline">
-                        <button type="submit" class="btn btn-sm">{{if .Enabled}}Disable{{else}}Enable{{end}}</button>
-                    </form>
-                    <details style="display:inline-block">
-                        <summary class="btn btn-sm" style="list-style:none;cursor:pointer">Edit</summary>
-                        <form method="POST" action="/admin/bots/{{.ID}}/update" class="form-grid" style="margin-top:0.5rem;min-width:320px">
-                            <div class="form-group">
-                                <label for="edit-name-{{.ID}}">Bot Name</label>
-                                <input type="text" id="edit-name-{{.ID}}" name="name" value="{{.Name}}" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="edit-client-id-{{.ID}}">Client ID</label>
-                                <input type="text" id="edit-client-id-{{.ID}}" name="client_id" value="{{.ClientID}}" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="edit-client-secret-{{.ID}}">Client Secret (leave blank to keep)</label>
-                                <input type="password" id="edit-client-secret-{{.ID}}" name="client_secret" placeholder="Leave blank to keep current">
-                            </div>
-                            <div class="form-group">
-                                <label for="edit-bot-token-{{.ID}}">Bot Token (leave blank to keep)</label>
-                                <input type="password" id="edit-bot-token-{{.ID}}" name="bot_token" placeholder="Leave blank to keep current">
-                                <label style="margin-top:0.35rem">
-                                    <input type="checkbox" name="clear_bot_token" value="1"> Clear Bot Token
-                                </label>
-                            </div>
-                            <div class="form-group">
-                                <label for="edit-redirect-uri-{{.ID}}">Redirect URI</label>
-                                <input type="text" id="edit-redirect-uri-{{.ID}}" name="redirect_uri" value="{{.RedirectURI}}">
-                            </div>
-                            <div class="form-group">
-                                <label for="edit-permissions-{{.ID}}">Permissions</label>
-                                <input type="text" id="edit-permissions-{{.ID}}" name="permissions" value="{{.Permissions}}">
-                            </div>
-                            <div class="form-group">
-                                <label for="edit-scopes-{{.ID}}">Scopes</label>
-                                <input type="text" id="edit-scopes-{{.ID}}" name="scopes" value="{{.Scopes}}">
-                            </div>
-                            <button type="submit" class="btn btn-primary btn-sm">Save Changes</button>
-                        </form>
-                    </details>
-                    <form method="POST" action="/admin/bots/{{.ID}}/delete" style="display:inline"
-                          onsubmit="return confirm('Delete {{.Name}}?')">
-                        <button type="submit" class="btn btn-sm btn-danger">Delete</button>
-                    </form>
-                </td>
-            </tr>
-            {{end}}
-        </tbody>
-    </table>
-    {{else}}
-    <p class="muted">No bots configured yet.</p>
-    {{end}}
-</section>
+                </div>
+            </div>
 
-<section class="card">
-    <h2>Install Links</h2>
-    {{if .Bots}}
-        {{range .Bots}}
-        <div class="card" style="margin-bottom:1rem">
-            <h3>{{.Name}} <span class="muted">(<code>{{.ClientID}}</code>)</span></h3>
-            <form method="POST" action="/admin/bots/{{.ID}}/links" class="form-grid">
-                <div class="form-group">
-                    <label for="link-name-{{.ID}}">Link Name</label>
-                    <input type="text" id="link-name-{{.ID}}" name="link_name" placeholder="Default / Lite / Full Access" required>
-                </div>
-                <div class="form-group">
-                    <label for="link-redirect-uri-{{.ID}}">Redirect URI</label>
-                    <input type="text" id="link-redirect-uri-{{.ID}}" name="redirect_uri" placeholder="https://example.com/callback" value="{{.RedirectURI}}">
-                </div>
-                <div class="form-group">
-                    <label for="link-permissions-{{.ID}}">Permissions</label>
-                    <input type="text" id="link-permissions-{{.ID}}" name="permissions" placeholder="8" value="{{.Permissions}}">
-                </div>
-                <div class="form-group">
-                    <label for="link-scopes-{{.ID}}">Scopes</label>
-                    <input type="text" id="link-scopes-{{.ID}}" name="scopes" placeholder="bot applications.commands" value="{{if .Scopes}}{{.Scopes}}{{else}}bot{{end}}">
-                </div>
-                <button type="submit" class="btn btn-primary btn-sm">Add Install Link</button>
-            </form>
+            <div class="actions actions-wrap" style="margin-bottom:0.8rem">
+                <form method="POST" action="/admin/bots/{{.ID}}/toggle" class="inline-form">
+                    <button type="submit" class="btn btn-sm">{{if .Enabled}}Disable{{else}}Enable{{end}}</button>
+                </form>
+                <details style="display:inline-block">
+                    <summary class="btn btn-sm" style="list-style:none;cursor:pointer">Edit Bot</summary>
+                    <form method="POST" action="/admin/bots/{{.ID}}/update" class="form-grid" style="margin-top:0.5rem;min-width:320px">
+                        <div class="form-group">
+                            <label for="edit-name-{{.ID}}">Bot Name</label>
+                            <input type="text" id="edit-name-{{.ID}}" name="name" value="{{.Name}}" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-client-id-{{.ID}}">Client ID</label>
+                            <input type="text" id="edit-client-id-{{.ID}}" name="client_id" value="{{.ClientID}}" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-client-secret-{{.ID}}">Client Secret (leave blank to keep)</label>
+                            <input type="password" id="edit-client-secret-{{.ID}}" name="client_secret" placeholder="Leave blank to keep current">
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-bot-token-{{.ID}}">Bot Token (leave blank to keep)</label>
+                            <input type="password" id="edit-bot-token-{{.ID}}" name="bot_token" placeholder="Leave blank to keep current">
+                            <label style="margin-top:0.35rem">
+                                <input type="checkbox" name="clear_bot_token" value="1"> Clear Bot Token
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-redirect-uri-{{.ID}}">Redirect URI</label>
+                            <input type="text" id="edit-redirect-uri-{{.ID}}" name="redirect_uri" value="{{.RedirectURI}}">
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-permissions-{{.ID}}">Permissions</label>
+                            <input type="text" id="edit-permissions-{{.ID}}" name="permissions" value="{{.Permissions}}">
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-scopes-{{.ID}}">Scopes</label>
+                            <input type="text" id="edit-scopes-{{.ID}}" name="scopes" value="{{.Scopes}}">
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm">Save Bot</button>
+                    </form>
+                </details>
+                <form method="POST" action="/admin/bots/{{.ID}}/delete" class="inline-form"
+                      onsubmit="return confirm('Delete {{.Name}}?')">
+                    <button type="submit" class="btn btn-sm btn-danger">Delete Bot</button>
+                </form>
+            </div>
 
-            {{$links := index $.LinksByBot .ID}}
-            {{if $links}}
-            <table style="margin-top:0.75rem">
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Scopes</th>
-                        <th>Redirect URI</th>
-                        <th>Status</th>
-                        <th>Install URL</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
+            <div class="bot-links-section">
+                <h4>Install Links</h4>
+                <form method="POST" action="/admin/bots/{{.ID}}/links" class="form-grid">
+                    <div class="form-group">
+                        <label for="link-name-{{.ID}}">Link Name</label>
+                        <input type="text" id="link-name-{{.ID}}" name="link_name" placeholder="Default / Lite / Full Access" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="link-redirect-uri-{{.ID}}">Redirect URI</label>
+                        <input type="text" id="link-redirect-uri-{{.ID}}" name="redirect_uri" placeholder="https://example.com/callback" value="{{.RedirectURI}}">
+                    </div>
+                    <div class="form-group">
+                        <label for="link-permissions-{{.ID}}">Permissions</label>
+                        <input type="text" id="link-permissions-{{.ID}}" name="permissions" placeholder="8" value="{{.Permissions}}">
+                    </div>
+                    <div class="form-group">
+                        <label for="link-scopes-{{.ID}}">Scopes</label>
+                        <input type="text" id="link-scopes-{{.ID}}" name="scopes" placeholder="bot applications.commands" value="{{if .Scopes}}{{.Scopes}}{{else}}bot{{end}}">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm">Add Link</button>
+                </form>
+
+                {{$links := index $.LinksByBot .ID}}
+                {{if $links}}
+                <div class="link-list">
                     {{range $links}}
-                    <tr>
-                        <td>{{.Name}}</td>
-                        <td>{{.Scopes}}</td>
-                        <td class="muted">{{if .RedirectURI}}{{.RedirectURI}}{{else}}—{{end}}</td>
-                        <td>
+                    <div class="link-item">
+                        <div class="link-item-main">
+                            <strong>{{.Name}}</strong>
+                            <span class="muted">/install/{{.ID}}</span>
+                            <span class="muted">Scopes: {{.Scopes}}</span>
                             {{if .Enabled}}
                                 <span class="badge badge-on">Enabled</span>
                             {{else}}
                                 <span class="badge badge-off">Disabled</span>
                             {{end}}
-                        </td>
-                        <td><code>/install/{{.ID}}</code></td>
-                        <td class="actions actions-wrap">
+                        </div>
+                        <div class="actions actions-wrap">
                             <form method="POST" action="/admin/links/{{.ID}}/toggle" class="inline-form">
                                 <button type="submit" class="btn btn-sm">{{if .Enabled}}Disable{{else}}Enable{{end}}</button>
                             </form>
@@ -215,18 +182,18 @@
                                   onsubmit="return confirm('Delete link {{.Name}}?')">
                                 <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                             </form>
-                        </td>
-                    </tr>
+                        </div>
+                    </div>
                     {{end}}
-                </tbody>
-            </table>
-            {{else}}
-            <p class="muted" style="margin-top:0.75rem">No install links yet for this bot.</p>
-            {{end}}
+                </div>
+                {{else}}
+                <p class="muted" style="margin-top:0.75rem">No install links yet for this bot.</p>
+                {{end}}
+            </div>
         </div>
         {{end}}
     {{else}}
-    <p class="muted">Add a bot first, then create one or more install links per bot.</p>
+    <p class="muted">No bots configured yet.</p>
     {{end}}
 </section>
 

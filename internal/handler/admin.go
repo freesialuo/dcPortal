@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"dcportal/internal/discord"
 	"dcportal/internal/model"
@@ -20,6 +21,16 @@ type AdminHandler struct {
 	store         *store.Store
 	tmpl          *template.Template
 	discordClient *discord.Client
+}
+
+type adminInstallView struct {
+	ID          int64
+	BotName     string
+	LinkName    string
+	GuildID     string
+	GuildName   string
+	MemberCount int
+	InstalledAt time.Time
 }
 
 // NewAdminHandler creates a new AdminHandler.
@@ -46,7 +57,7 @@ func (h *AdminHandler) RegisterRoutes(mux *http.ServeMux) {
 }
 
 func (h *AdminHandler) index(w http.ResponseWriter, r *http.Request) {
-	bots, err := h.store.ListBots()
+	bots, err := h.store.ListBotsForAdmin()
 	if err != nil {
 		log.Printf("ERROR list bots: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -65,11 +76,23 @@ func (h *AdminHandler) index(w http.ResponseWriter, r *http.Request) {
 		linksByBot[link.BotID] = append(linksByBot[link.BotID], link)
 	}
 
-	installs, err := h.store.ListInstalls()
+	installsRaw, err := h.store.ListInstalls()
 	if err != nil {
 		log.Printf("ERROR list installs: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
+	}
+	installs := make([]adminInstallView, 0, len(installsRaw))
+	for _, install := range installsRaw {
+		installs = append(installs, adminInstallView{
+			ID:          install.ID,
+			BotName:     install.BotName,
+			LinkName:    install.LinkName,
+			GuildID:     install.GuildID,
+			GuildName:   install.GuildName,
+			MemberCount: install.MemberCount,
+			InstalledAt: install.InstalledAt,
+		})
 	}
 
 	blacklist, err := h.store.ListGuildBlacklist()
@@ -177,51 +200,34 @@ func (h *AdminHandler) updateBot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existing, err := h.store.GetBot(id)
-	if err != nil {
-		log.Printf("ERROR get bot %d for update: %v", id, err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-	if existing == nil {
-		http.Error(w, "Bot not found", http.StatusNotFound)
-		return
-	}
-
 	clientSecret := strings.TrimSpace(r.FormValue("client_secret"))
-	if clientSecret == "" {
-		clientSecret = existing.ClientSecret
-	}
-
 	botToken := strings.TrimSpace(r.FormValue("bot_token"))
-	if botToken == "" {
-		botToken = existing.BotToken
+	clearBotToken := strings.TrimSpace(r.FormValue("clear_bot_token")) == "1"
+	patch := &model.BotUpdatePatch{
+		ID:            id,
+		Name:          strings.TrimSpace(r.FormValue("name")),
+		ClientID:      strings.TrimSpace(r.FormValue("client_id")),
+		Permissions:   strings.TrimSpace(r.FormValue("permissions")),
+		Scopes:        strings.TrimSpace(r.FormValue("scopes")),
+		RedirectURI:   strings.TrimSpace(r.FormValue("redirect_uri")),
+		ClearBotToken: clearBotToken,
 	}
-	if strings.TrimSpace(r.FormValue("clear_bot_token")) == "1" {
-		botToken = ""
+	if clientSecret != "" {
+		patch.ClientSecret = &clientSecret
 	}
-
-	bot := &model.Bot{
-		ID:           existing.ID,
-		Name:         strings.TrimSpace(r.FormValue("name")),
-		ClientID:     strings.TrimSpace(r.FormValue("client_id")),
-		ClientSecret: clientSecret,
-		BotToken:     botToken,
-		Permissions:  strings.TrimSpace(r.FormValue("permissions")),
-		Scopes:       strings.TrimSpace(r.FormValue("scopes")),
-		RedirectURI:  strings.TrimSpace(r.FormValue("redirect_uri")),
-		Enabled:      existing.Enabled,
+	if botToken != "" && !clearBotToken {
+		patch.BotToken = &botToken
 	}
 
-	if bot.Name == "" || bot.ClientID == "" || bot.ClientSecret == "" {
-		http.Error(w, "Name, Client ID, and Client Secret are required", http.StatusBadRequest)
+	if patch.Name == "" || patch.ClientID == "" {
+		http.Error(w, "Name and Client ID are required", http.StatusBadRequest)
 		return
 	}
-	if bot.Scopes == "" {
-		bot.Scopes = "bot"
+	if patch.Scopes == "" {
+		patch.Scopes = "bot"
 	}
 
-	if err := h.store.UpdateBot(bot); err != nil {
+	if err := h.store.UpdateBotPatch(patch); err != nil {
 		log.Printf("ERROR update bot %d: %v", id, err)
 		if errors.Is(err, store.ErrNotFound) {
 			http.Error(w, "Bot not found", http.StatusNotFound)

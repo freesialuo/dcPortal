@@ -233,6 +233,36 @@ func (s *Store) ListBots() ([]model.Bot, error) {
 	return bots, rows.Err()
 }
 
+// ListBotsForAdmin returns bot records redacted for admin template rendering.
+func (s *Store) ListBotsForAdmin() ([]model.BotAdminView, error) {
+	rows, err := s.db.Query(`
+		SELECT id, name, client_id, permissions, scopes, redirect_uri, enabled, created_at,
+		       CASE WHEN TRIM(client_secret) <> '' THEN 1 ELSE 0 END AS has_client_secret,
+		       CASE WHEN TRIM(bot_token) <> '' THEN 1 ELSE 0 END AS has_bot_token
+		FROM bots
+		ORDER BY id`)
+	if err != nil {
+		return nil, fmt.Errorf("query bots for admin: %w", err)
+	}
+	defer rows.Close()
+
+	var bots []model.BotAdminView
+	for rows.Next() {
+		var b model.BotAdminView
+		var hasClientSecret int
+		var hasBotToken int
+		if err := rows.Scan(
+			&b.ID, &b.Name, &b.ClientID, &b.Permissions, &b.Scopes, &b.RedirectURI, &b.Enabled, &b.CreatedAt, &hasClientSecret, &hasBotToken,
+		); err != nil {
+			return nil, fmt.Errorf("scan bot for admin: %w", err)
+		}
+		b.HasClientSecret = hasClientSecret == 1
+		b.HasBotToken = hasBotToken == 1
+		bots = append(bots, b)
+	}
+	return bots, rows.Err()
+}
+
 // ListEnabledBots returns only enabled bot records.
 func (s *Store) ListEnabledBots() ([]model.Bot, error) {
 	rows, err := s.db.Query("SELECT " + botColumns + " FROM bots WHERE enabled = 1 ORDER BY id")
@@ -278,6 +308,54 @@ func (s *Store) UpdateBot(b *model.Bot) error {
 	rows, err := result.RowsAffected()
 	if err != nil {
 		return fmt.Errorf("update bot rows affected: %w", err)
+	}
+	if rows == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// UpdateBotPatch updates editable bot fields while keeping secrets write-only.
+func (s *Store) UpdateBotPatch(patch *model.BotUpdatePatch) error {
+	if patch == nil {
+		return fmt.Errorf("update bot patch: nil patch")
+	}
+
+	setParts := []string{
+		"name = ?",
+		"client_id = ?",
+		"permissions = ?",
+		"scopes = ?",
+		"redirect_uri = ?",
+	}
+	args := []any{
+		patch.Name,
+		patch.ClientID,
+		patch.Permissions,
+		patch.Scopes,
+		patch.RedirectURI,
+	}
+
+	if patch.ClientSecret != nil {
+		setParts = append(setParts, "client_secret = ?")
+		args = append(args, *patch.ClientSecret)
+	}
+	if patch.ClearBotToken {
+		setParts = append(setParts, "bot_token = ''")
+	} else if patch.BotToken != nil {
+		setParts = append(setParts, "bot_token = ?")
+		args = append(args, *patch.BotToken)
+	}
+
+	args = append(args, patch.ID)
+	query := fmt.Sprintf("UPDATE bots SET %s WHERE id = ?", strings.Join(setParts, ", "))
+	result, err := s.db.Exec(query, args...)
+	if err != nil {
+		return fmt.Errorf("update bot patch: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("update bot patch rows affected: %w", err)
 	}
 	if rows == 0 {
 		return ErrNotFound

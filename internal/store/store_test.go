@@ -97,6 +97,42 @@ func TestGetBot(t *testing.T) {
 	}
 }
 
+func TestListBotsForAdmin(t *testing.T) {
+	s := newTestStore(t)
+
+	withToken := testBot("AdminView-1", "admin-1")
+	withToken.BotToken = "bot-token-1"
+	if err := s.CreateBot(withToken); err != nil {
+		t.Fatalf("CreateBot(withToken): %v", err)
+	}
+
+	withoutToken := testBot("AdminView-2", "admin-2")
+	withoutToken.BotToken = ""
+	if err := s.CreateBot(withoutToken); err != nil {
+		t.Fatalf("CreateBot(withoutToken): %v", err)
+	}
+
+	bots, err := s.ListBotsForAdmin()
+	if err != nil {
+		t.Fatalf("ListBotsForAdmin: %v", err)
+	}
+	if len(bots) != 2 {
+		t.Fatalf("expected 2 bots, got %d", len(bots))
+	}
+	if !bots[0].HasClientSecret {
+		t.Fatalf("expected client secret configured for bot %d", bots[0].ID)
+	}
+	if !bots[0].HasBotToken {
+		t.Fatalf("expected bot token configured for bot %d", bots[0].ID)
+	}
+	if !bots[1].HasClientSecret {
+		t.Fatalf("expected client secret configured for bot %d", bots[1].ID)
+	}
+	if bots[1].HasBotToken {
+		t.Fatalf("expected bot token missing for bot %d", bots[1].ID)
+	}
+}
+
 func TestToggleBot(t *testing.T) {
 	s := newTestStore(t)
 
@@ -171,6 +207,78 @@ func TestUpdateBot(t *testing.T) {
 	}
 	if got.Enabled {
 		t.Error("Enabled = true, want false")
+	}
+}
+
+func TestUpdateBotPatch(t *testing.T) {
+	s := newTestStore(t)
+
+	bot := testBot("BotPatch", "patch-1")
+	bot.BotToken = "bot-token-1"
+	if err := s.CreateBot(bot); err != nil {
+		t.Fatalf("CreateBot: %v", err)
+	}
+
+	patch := &model.BotUpdatePatch{
+		ID:          bot.ID,
+		Name:        "BotPatch-Updated",
+		ClientID:    "patch-2",
+		Permissions: "16",
+		Scopes:      "bot applications.commands",
+		RedirectURI: "https://example.com/callback",
+	}
+	if err := s.UpdateBotPatch(patch); err != nil {
+		t.Fatalf("UpdateBotPatch preserve secrets: %v", err)
+	}
+
+	got, err := s.GetBot(bot.ID)
+	if err != nil {
+		t.Fatalf("GetBot: %v", err)
+	}
+	if got.ClientSecret != "secret-patch-1" {
+		t.Fatalf("ClientSecret = %q, want preserved", got.ClientSecret)
+	}
+	if got.BotToken != "bot-token-1" {
+		t.Fatalf("BotToken = %q, want preserved", got.BotToken)
+	}
+
+	newSecret := "secret-patch-2"
+	newBotToken := "bot-token-2"
+	patch.ClientSecret = &newSecret
+	patch.BotToken = &newBotToken
+	if err := s.UpdateBotPatch(patch); err != nil {
+		t.Fatalf("UpdateBotPatch rotate secrets: %v", err)
+	}
+
+	got, err = s.GetBot(bot.ID)
+	if err != nil {
+		t.Fatalf("GetBot after rotate: %v", err)
+	}
+	if got.ClientSecret != newSecret {
+		t.Fatalf("ClientSecret = %q, want %q", got.ClientSecret, newSecret)
+	}
+	if got.BotToken != newBotToken {
+		t.Fatalf("BotToken = %q, want %q", got.BotToken, newBotToken)
+	}
+
+	clearPatch := &model.BotUpdatePatch{
+		ID:            bot.ID,
+		Name:          got.Name,
+		ClientID:      got.ClientID,
+		Permissions:   got.Permissions,
+		Scopes:        got.Scopes,
+		RedirectURI:   got.RedirectURI,
+		ClearBotToken: true,
+	}
+	if err := s.UpdateBotPatch(clearPatch); err != nil {
+		t.Fatalf("UpdateBotPatch clear token: %v", err)
+	}
+	got, err = s.GetBot(bot.ID)
+	if err != nil {
+		t.Fatalf("GetBot after clear token: %v", err)
+	}
+	if got.BotToken != "" {
+		t.Fatalf("BotToken = %q, want empty", got.BotToken)
 	}
 }
 

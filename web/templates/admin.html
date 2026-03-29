@@ -12,6 +12,7 @@
 
 <section class="card">
     <h2>Add Bot</h2>
+    <p class="muted section-note">Security model: Client Secret and Bot Token are write-only in this console. They can be set, rotated, or cleared, but never read back.</p>
     <form method="POST" action="/admin/bots" class="form-grid">
         <div class="form-group">
             <label for="name">Bot Name</label>
@@ -58,6 +59,20 @@
                 <div>
                     <h3>{{.Name}}</h3>
                     <p class="muted"><code>{{.ClientID}}</code> · {{if .RedirectURI}}{{.RedirectURI}}{{else}}No Redirect URI{{end}}</p>
+                    <p class="muted">
+                        Client Secret:
+                        {{if .HasClientSecret}}
+                            <span class="badge badge-on">Configured</span>
+                        {{else}}
+                            <span class="badge badge-off">Missing</span>
+                        {{end}}
+                        · Bot Token:
+                        {{if .HasBotToken}}
+                            <span class="badge badge-on">Configured</span>
+                        {{else}}
+                            <span class="badge badge-off">Missing</span>
+                        {{end}}
+                    </p>
                 </div>
                 <div>
                     {{if .Enabled}}
@@ -84,12 +99,12 @@
                             <input type="text" id="edit-client-id-{{.ID}}" name="client_id" value="{{.ClientID}}" required>
                         </div>
                         <div class="form-group">
-                            <label for="edit-client-secret-{{.ID}}">Client Secret (leave blank to keep)</label>
-                            <input type="password" id="edit-client-secret-{{.ID}}" name="client_secret" placeholder="Leave blank to keep current">
+                            <label for="edit-client-secret-{{.ID}}">Client Secret (leave blank to keep existing)</label>
+                            <input type="password" id="edit-client-secret-{{.ID}}" name="client_secret" placeholder="Paste new value to overwrite">
                         </div>
                         <div class="form-group">
-                            <label for="edit-bot-token-{{.ID}}">Bot Token (leave blank to keep)</label>
-                            <input type="password" id="edit-bot-token-{{.ID}}" name="bot_token" placeholder="Leave blank to keep current">
+                            <label for="edit-bot-token-{{.ID}}">Bot Token (leave blank to keep existing)</label>
+                            <input type="password" id="edit-bot-token-{{.ID}}" name="bot_token" placeholder="Paste new value to overwrite">
                             <label style="margin-top:0.35rem">
                                 <input type="checkbox" name="clear_bot_token" value="1"> Clear Bot Token
                             </label>

@@ -205,6 +205,53 @@ func TestAdminUpdateBotClearToken(t *testing.T) {
 	}
 }
 
+func TestAdminUpdateBotRotateSecrets(t *testing.T) {
+	h, s := setupAdminTest(t)
+
+	bot := &model.Bot{
+		Name:         "RotateBot",
+		ClientID:     "rotate-1",
+		ClientSecret: "old-secret",
+		BotToken:     "old-token",
+		Scopes:       "bot",
+		Enabled:      true,
+	}
+	if err := s.CreateBot(bot); err != nil {
+		t.Fatalf("CreateBot: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	form := url.Values{
+		"name":          {"RotateBot"},
+		"client_id":     {"rotate-1"},
+		"client_secret": {"new-secret"},
+		"bot_token":     {"new-token"},
+		"permissions":   {"8"},
+		"scopes":        {"bot"},
+	}
+	req := httptest.NewRequest("POST", "/admin/bots/"+strconv.FormatInt(bot.ID, 10)+"/update", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusSeeOther)
+	}
+
+	got, err := s.GetBot(bot.ID)
+	if err != nil {
+		t.Fatalf("GetBot: %v", err)
+	}
+	if got.ClientSecret != "new-secret" {
+		t.Fatalf("ClientSecret = %q, want new-secret", got.ClientSecret)
+	}
+	if got.BotToken != "new-token" {
+		t.Fatalf("BotToken = %q, want new-token", got.BotToken)
+	}
+}
+
 func TestAdminCreateInstallLink(t *testing.T) {
 	h, s := setupAdminTest(t)
 

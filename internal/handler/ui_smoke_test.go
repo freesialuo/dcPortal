@@ -263,3 +263,22 @@ func TestStylesheetSmoke(t *testing.T) {
 		}
 	}
 }
+
+func TestLayoutTemplateNoRemoteFonts(t *testing.T) {
+	root := repoRootFromThisFile(t)
+	layoutPath := filepath.Join(root, "web", "templates", "layout.html")
+	content, err := os.ReadFile(layoutPath)
+	if err != nil {
+		t.Fatalf("read layout template: %v", err)
+	}
+	layout := string(content)
+	disallow := []string{
+		"fonts.googleapis.com",
+		"fonts.gstatic.com",
+	}
+	for _, token := range disallow {
+		if strings.Contains(layout, token) {
+			t.Fatalf("layout should not reference remote font host %q", token)
+		}
+	}
+}

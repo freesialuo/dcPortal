@@ -265,6 +265,10 @@ input[type="password"]:focus {
     border-color: var(--line-strong);
 }
 
+.copy-link-btn {
+    min-width: 7.6rem;
+}
+
 .btn-sm {
     padding: 0.42rem 0.78rem;
     font-size: 0.8rem;

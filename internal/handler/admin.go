@@ -287,6 +287,10 @@ func (h *AdminHandler) createInstallLink(w http.ResponseWriter, r *http.Request)
 	if link.RedirectURI == "" {
 		link.RedirectURI = bot.RedirectURI
 	}
+	if strings.TrimSpace(link.RedirectURI) == "" {
+		http.Error(w, "Redirect URI is required (set on link or bot)", http.StatusBadRequest)
+		return
+	}
 	if err := validatePermissions(link.Permissions); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

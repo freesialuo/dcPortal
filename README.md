@@ -204,6 +204,7 @@ database:
 
 - `Link Name`：区分不同安装入口（如 Default / Lite / Full Access）。
 - `Permissions` / `Scopes` / `Redirect URI`：按链接独立配置。
+- `Redirect URI` 必须可用：若链接与所属 Bot 都未配置 `Redirect URI`，创建会被拒绝。
 - 支持对链接执行编辑、启用/禁用、删除。
 - 安装入口按链接路由：`/install/{link_id}`。
 

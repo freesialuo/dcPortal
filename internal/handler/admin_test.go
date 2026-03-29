@@ -415,6 +415,47 @@ func TestAdminCreateInstallLinkRejectsInvalidRedirectURI(t *testing.T) {
 	}
 }
 
+func TestAdminCreateInstallLinkRejectsMissingRedirectURI(t *testing.T) {
+	h, s := setupAdminTest(t)
+
+	bot := &model.Bot{
+		Name:         "BotNoRedirect",
+		ClientID:     "12345",
+		ClientSecret: "secret",
+		RedirectURI:  "",
+		Enabled:      true,
+	}
+	if err := s.CreateBot(bot); err != nil {
+		t.Fatalf("CreateBot: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	form := url.Values{
+		"link_name":   {"No Redirect"},
+		"permissions": {"8"},
+		"scopes":      {"bot"},
+	}
+	req := httptest.NewRequest("POST", "/admin/bots/"+strconv.FormatInt(bot.ID, 10)+"/links", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+
+	links, err := s.ListInstallLinksByBot(bot.ID)
+	if err != nil {
+		t.Fatalf("ListInstallLinksByBot: %v", err)
+	}
+	// only seeded default link should remain
+	if len(links) != 1 {
+		t.Fatalf("expected only default link after reject, got %d links", len(links))
+	}
+}
+
 func TestAdminUpdateInstallLink(t *testing.T) {
 	h, s := setupAdminTest(t)
 

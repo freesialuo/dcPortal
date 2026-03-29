@@ -204,6 +204,7 @@ In `/admin`, click `Edit` in the bot list to update an existing bot:
 Each bot can have multiple install links.
 
 - Add link fields: `Link Name`, `Permissions`, `Scopes`, `Redirect URI`
+- Redirect URI must be available: creation is rejected when both link and parent bot redirect URIs are empty.
 - Edit/enable/disable/delete links independently
 - Portal installs are link-based (`/install/{link_id}`)
 - Governance (blacklist, disconnect, leave guild) remains bot-based

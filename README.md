@@ -1,114 +1,121 @@
 # DCPortal
 
-一个面向私有/半私有 Discord Bot 分发场景的授权门户。
+**English** · [简体中文](README.zh-CN.md)
 
-English README: [README.en.md](./README.en.md)
+[![CI/CD](https://github.com/freesialuo/dcPortal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/freesialuo/dcPortal/actions/workflows/ci.yml)
+[![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSE)
+[![Container image on GHCR](https://img.shields.io/badge/image-ghcr.io%2Ffreesialuo%2Fdcportal-2496ED?logo=docker&logoColor=white)](https://github.com/freesialuo/dcPortal/pkgs/container/dcportal)
 
-DCPortal 通过“受控安装入口 + 管理后台 + 可审计安装记录 + 黑名单策略”，替代直接公开 Discord OAuth2 安装链接的方式，帮助团队更安全地管理 Bot 的安装与撤销。
+A gated install portal for private and semi-private Discord bots.
 
-- 镜像地址：`ghcr.io/freesialuo/dcportal:latest`
-- 主要语言：Go
-- 存储：SQLite
-- 部署方式：二进制、Docker、Docker Compose
+Instead of handing everyone a Discord OAuth2 install link, DCPortal puts a controlled flow in front of it:
 
-## 为什么使用 DCPortal
+- gated install entry
+- admin management console
+- auditable install records
+- blacklist policy for guild-level control
 
-在很多团队里，Discord Bot 往往并不希望被任何人随意安装。
+- Docker image: `ghcr.io/freesialuo/dcportal:latest`
+- Language: Go
+- Storage: SQLite
+- Deployment: binary, Docker, Docker Compose
 
-DCPortal 解决了这几个核心问题：
+## Why DCPortal
 
-- 不直接暴露官方安装链接，而是由你控制安装入口。
-- 安装页与管理页 token 分离，避免权限混用。
-- 管理员可查看已安装服务器列表并主动执行治理动作。
-- 支持断开、断开并拉黑、撤销 OAuth2 User Install 授权。
-- 支持刷新服务器信息（名称、ID、成员数）用于运营盘点。
+Many teams do not want anyone to freely install internal bots via public links.
 
-## 功能总览
+DCPortal helps by providing:
 
-### 访问与认证
+- controlled install entry instead of direct public OAuth2 links
+- separated install/admin tokens to avoid privilege overlap
+- visible install records and active governance operations
+- disconnect, disconnect+blacklist, OAuth2 user authorization revocation
+- guild info refresh (name, ID, member count) for operations
 
-- 安装页访问令牌（Install Token）。
-- 管理页访问令牌（Admin Token）。
-- 两类会话 Cookie 独立，不互相覆盖。
+## Feature Overview
 
-### Bot 管理
+### Access and Authentication
 
-- 新增 Bot（Name / Client ID / Client Secret / Bot Token / Redirect URI / Scopes / Permissions）。
-- 编辑已添加 Bot（支持修改名称、OAuth2 配置、权限与可选清空 Bot Token）。
-- 管理后台中的 `Client Secret` / `Bot Token` 采用写入式模型：只可覆盖或清空，不可回显读取。
-- 按 Bot 管理多个安装链接（同一 Bot 可配置多组权限/Scope/Redirect URI）。
-- 启用/禁用 Bot（控制是否在安装门户展示）。
-- 删除 Bot（同时清理关联安装记录与黑名单记录）。
+- Install token for install portal access
+- Admin token for admin console access
+- Independent session cookies for install/admin contexts
 
-### OAuth2 安装流程
+### Bot Management
 
-- 标准 OAuth2 authorization code flow。
-- `state` 防 CSRF（单次使用，带过期）。
-- 回调完成后记录安装信息。
+- Add bot (Name / Client ID / Client Secret / Bot Token / Redirect URI / Scopes / Permissions)
+- Edit existing bot settings (name, OAuth2 fields, permissions, and optional Bot Token clearing)
+- `Client Secret` / `Bot Token` are write-only in admin UI: overwrite or clear is allowed, read-back is not.
+- Manage install links per bot (one bot can have multiple permission/scope/redirect combinations)
+- Enable/disable bot visibility on the install portal
+- Delete bot and related install/blacklist records
 
-### 服务器连接治理
+### OAuth2 Install Flow
 
-- 刷新单条或全部安装记录（Guild Name / Member Count）。
-- 撤销 User Install 授权（Revoke OAuth2 token）。
-- 断开连接（删除记录并尝试让 Bot 退出服务器）。
-- 断开并拉黑（后续安装到同一服务器将被拒绝）。
+- Standard OAuth2 authorization code flow
+- `state`-based CSRF protection (single-use with expiration)
+- Install record persistence after callback
 
-### 黑名单策略
+### Guild Governance
 
-- 黑名单按 `bot_id + guild_id` 维度生效。
-- 被拉黑服务器再次安装时，会在回调阶段被拦截。
-- 若配置了 Bot Token，系统会尝试让 Bot 立即离开该服务器。
+- Refresh one or all install records (guild name / member count)
+- Revoke User Install authorization (OAuth2 token revoke)
+- Disconnect link (remove record and attempt bot leave)
+- Disconnect + blacklist (future installs to same guild are blocked)
 
-## 页面与路由
+### Blacklist Policy
 
-| 路由 | 说明 |
+- Scope: `bot_id + guild_id`
+- Blocked guild installs are rejected during callback
+- If Bot Token is configured, bot leave is attempted immediately
+
+## Routes
+
+| Route | Description |
 |---|---|
-| `/` | 安装入口登录页（Install Token） |
-| `/portal` | Bot 安装选择页 |
-| `/install/{id}` | 发起某个 Bot 的 OAuth2 安装 |
-| `/callback` | Discord OAuth2 回调 |
-| `/admin/login` | 管理后台登录页（Admin Token） |
-| `/admin` | 管理后台首页 |
+| `/` | Install login page (Install Token) |
+| `/portal` | Bot selection page |
+| `/install/{id}` | Start OAuth2 install for a bot |
+| `/callback` | Discord OAuth2 callback |
+| `/admin/login` | Admin login page (Admin Token) |
+| `/admin` | Admin dashboard |
 
-## 系统架构（简述）
+## Architecture (Short)
 
-- `cmd/dcportal/main.go`：程序入口、路由装配、中间件挂载。
-- `internal/handler`：页面与业务流程。
-- `internal/discord`：Discord API 封装（token exchange / revoke / guild fetch / leave guild）。
-- `internal/store`：SQLite 数据访问与迁移。
-- `internal/middleware`：安装/管理鉴权中间件。
-- `web/templates` + `web/static`：前端页面模板与样式。
+- `cmd/dcportal/main.go`: app entry, routing, middleware wiring
+- `internal/handler`: web handlers and flow orchestration
+- `internal/discord`: Discord API client wrapper
+- `internal/store`: SQLite access and migration
+- `internal/middleware`: auth middleware
+- `web/templates` + `web/static`: UI templates and static assets
 
-## 快速开始
+## Quick Start
 
-### 1) 前置要求
+### 1) Requirements
 
 - Go 1.25+
-- 可访问 Discord OAuth2 API
-- 一个 Discord Application（至少配置 OAuth2 Redirect URI）
+- Discord OAuth2 API reachable
+- A Discord Application with OAuth2 Redirect URI configured
 
-### 2) 本地运行
+### 2) Run Locally
 
 ```bash
-# 1) 配置必须的 token
 export DCPORTAL_ADMIN_TOKEN="replace-with-strong-admin-token"
 export DCPORTAL_INSTALL_TOKEN="replace-with-strong-install-token"
 
-# 2) 可选覆盖
+# optional overrides
 export DCPORTAL_PORT="8080"
 export DCPORTAL_BASE_URL="http://localhost:8080"
 export DCPORTAL_DB_PATH="./data/dcportal.db"
 
-# 3) 运行
 make run
 ```
 
-启动后访问：
+Then open:
 
-- 安装登录页：`http://localhost:8080/`
-- 管理登录页：`http://localhost:8080/admin/login`
+- Install login: `http://localhost:8080/`
+- Admin login: `http://localhost:8080/admin/login`
 
-### 3) Docker 运行
+### 3) Run with Docker
 
 ```bash
 docker run -d \
@@ -143,9 +150,9 @@ volumes:
   dcportal-data:
 ```
 
-## 配置说明
+## Configuration
 
-DCPortal 同时支持 YAML 配置文件与环境变量覆盖，环境变量优先级更高。
+DCPortal supports YAML config with environment overrides (env wins).
 
 ### `configs/config.yaml`
 
@@ -164,145 +171,145 @@ database:
   path: "./data/dcportal.db"
 ```
 
-### 环境变量
+### Environment Variables
 
-| 变量 | 必需 | 默认值 | 说明 |
+| Variable | Required | Default | Description |
 |---|---|---|---|
-| `DCPORTAL_ADMIN_TOKEN` | 是 | 无 | 管理页认证 token |
-| `DCPORTAL_INSTALL_TOKEN` | 是 | 无 | 安装页认证 token |
-| `DCPORTAL_PORT` | 否 | `8080` | 服务端口 |
-| `DCPORTAL_BASE_URL` | 否 | `http://localhost:8080` | 对外访问地址 |
-| `DCPORTAL_DB_PATH` | 否 | `./data/dcportal.db` | SQLite 路径 |
+| `DCPORTAL_ADMIN_TOKEN` | Yes | N/A | Admin auth token |
+| `DCPORTAL_INSTALL_TOKEN` | Yes | N/A | Install auth token |
+| `DCPORTAL_PORT` | No | `8080` | Server port |
+| `DCPORTAL_BASE_URL` | No | `http://localhost:8080` | Public base URL |
+| `DCPORTAL_DB_PATH` | No | `./data/dcportal.db` | SQLite path |
 
-> `ADMIN_TOKEN` 和 `INSTALL_TOKEN` 不能保留默认占位值，否则程序会拒绝启动。
+`ADMIN_TOKEN` and `INSTALL_TOKEN` must not stay as default placeholders.
 
-## 管理后台操作手册
+## Admin Operations
 
-### 1) 新增 Bot
+### Add Bot
 
-在 `/admin` 的 `Add Bot` 中填写：
+Configure in `/admin`:
 
-- `Bot Name`：展示名。
-- `Client ID`：Discord Application Client ID。
-- `Client Secret`：OAuth2 code exchange 和 revoke 使用。
-- `Bot Token`：用于获取服务器详情与执行退服（建议必填）。
-- `Redirect URI`：必须与 Discord Developer Portal 配置完全一致。
-- `Permissions`：权限位整数。
-- `Scopes`：例如 `bot` 或 `bot applications.commands`。
+- Bot Name
+- Client ID
+- Client Secret
+- Bot Token (recommended for guild refresh and leave)
+- Redirect URI (must exactly match Discord Developer Portal)
+- Permissions
+- Scopes (`bot` or `bot applications.commands`)
 
-### 2) 编辑 Bot
+### Edit Bot
 
-在 `/admin` 的 Bot 列表中点击 `Edit`，可修改已添加 Bot：
+In `/admin`, click `Edit` in the bot list to update an existing bot:
 
 - `Bot Name` / `Client ID` / `Redirect URI` / `Permissions` / `Scopes`
-- `Client Secret`：留空则保留原值；若填写则覆盖（不会回显当前值）
-- `Bot Token`：留空则保留原值；若填写则覆盖，也可勾选 `Clear Bot Token` 清空
+- `Client Secret`: leave blank to keep current value, fill to overwrite (current value is never shown)
+- `Bot Token`: leave blank to keep current value, fill to overwrite, or check `Clear Bot Token`
 
-### 3) 管理安装链接（每个 Bot 可多个）
+### Install Links (Per Bot)
 
-在 `/admin` 的 `Install Links` 区域中，可为同一个 Bot 添加多条安装链接：
+Each bot can have multiple install links.
 
-- `Link Name`：区分不同安装入口（如 Default / Lite / Full Access）。
-- `Permissions` / `Scopes` / `Redirect URI`：按链接独立配置。
-- `Redirect URI` 必须可用：若链接与所属 Bot 都未配置 `Redirect URI`，创建会被拒绝。
-- 支持对链接执行编辑、启用/禁用、删除。
-- 安装入口按链接路由：`/install/{link_id}`。
+- Add link fields: `Link Name`, `Permissions`, `Scopes`, `Redirect URI`
+- Redirect URI must be available: creation is rejected when both link and parent bot redirect URIs are empty.
+- Edit/enable/disable/delete links independently
+- Portal installs are link-based (`/install/{link_id}`)
+- Governance (blacklist, disconnect, leave guild) remains bot-based
 
-> 黑名单、断开连接、退服等治理动作仍按 Bot 维度执行。
+### Install Governance
 
-### 4) 安装治理动作
+Per install record:
 
-对于每条安装记录，可执行：
+- `Refresh`
+- `Revoke OAuth2`
+- `Disconnect`
+- `Disconnect + Blacklist`
 
-- `Refresh`：刷新该服务器名称与成员数。
-- `Revoke OAuth2`：撤销用户授权 token。
-- `Disconnect`：删除连接记录，并尝试让 Bot 退出服务器。
-- `Disconnect + Blacklist`：断开并拉黑，后续再次安装会被拒绝。
+Batch action:
 
-批量动作：
+- `Refresh All Guild Info`
 
-- `Refresh All Guild Info`：刷新全部安装记录。
+## Security Recommendations
 
-## 安全建议
+- Use strong random tokens (at least 32 chars)
+- Use HTTPS in production (with reverse proxy)
+- Add additional protection to `/admin` (IP allowlist, etc.)
+- Never commit secrets (`Client Secret`, `Bot Token`)
+- Back up SQLite DB regularly
 
-- 使用高强度随机 token（Admin/Install 至少 32 位）。
-- 生产环境务必使用 HTTPS 与反向代理（Nginx/Caddy/Traefik）。
-- 对 `/admin` 建议增加 IP 白名单或二次访问控制。
-- 不要把 `Client Secret`、`Bot Token` 提交到仓库。
-- 定期备份 SQLite 数据文件。
+## Reverse Proxy Notes
 
-## 反向代理建议
+Keep these fully consistent:
 
-确保将真实外部 URL 与 `DCPORTAL_BASE_URL`、Discord 应用中的 Redirect URI 保持一致。
+- external URL
+- `DCPORTAL_BASE_URL`
+- Discord Redirect URI
 
-常见失败原因：
+Typical mismatch issues:
 
-- 协议不一致（`http` vs `https`）。
-- 端口不一致。
-- 路径不一致（尤其 `/callback`）。
+- protocol mismatch (`http` vs `https`)
+- port mismatch
+- path mismatch (`/callback`)
 
-## 数据与持久化
+## Persistence
 
-默认数据库位置：`./data/dcportal.db`
+Default DB path: `./data/dcportal.db`
 
-生产部署建议：
+Production tips:
 
-- Docker 使用 volume 挂载 `/app/data`。
-- 升级前备份数据库文件。
-- 数据库与应用分盘，避免容器销毁导致数据丢失。
+- mount `/app/data` as volume in Docker
+- backup before upgrading
+- separate app and data lifecycle
 
-## 开发与测试
+## Development
 
 ```bash
-make test        # go test ./... -v
-make test-cover  # go test ./... -cover
-make vet         # go vet ./...
-make build       # 生成 bin/dcportal
+make test
+make test-cover
+make vet
+make build
 ```
 
-## 发布流程（建议）
+## Release (Recommended)
 
-1. 在 `main` 分支完成变更并通过测试。
-2. 创建带语义版本号的 tag（例如 `v0.1.5`）。
-3. CI 在 tag 流水线中构建并发布镜像到 GHCR。
-4. 部署端更新镜像版本或使用 `latest`。
+1. Merge to `main`
+2. Tag semantic version (e.g. `v0.1.5`)
+3. CI builds/publishes GHCR image
+4. Deploy by pinned tag or `latest`
 
-## 升级说明
+## Upgrade Notes
 
-如果你从较旧版本升级到当前版本：
+- DB migrations run automatically at startup
+- Back up DB before upgrade
+- fill Bot Token for existing bots after upgrade to enable refresh/leave features
 
-- 程序启动时会自动执行 SQLite 迁移（新增字段/表）。
-- 建议升级前先备份数据库。
-- 升级后在管理页为已有 Bot 补齐 `Bot Token`，否则“刷新服务器信息/退服”会受限。
+## FAQ
 
-## 常见问题（FAQ）
+### Redirect loop after login
 
-### Q1: 登录后仍被重定向到登录页
+- check token type (admin vs install)
+- check browser cookie policies
 
-- 检查 token 是否输错（Admin 与 Install 不通用）。
-- 检查浏览器是否拦截 Cookie。
+### OAuth2 callback failure
 
-### Q2: OAuth2 回调失败
+- verify Redirect URI exact match
+- verify `DCPORTAL_BASE_URL` matches real access URL
 
-- 重点核对 Redirect URI（协议、域名、端口、路径必须完全一致）。
-- 核对 `DCPORTAL_BASE_URL` 是否是用户实际访问地址。
+### Member count not refreshing
 
-### Q3: 为什么成员数没有刷新
+- missing/invalid Bot Token
+- bot not in guild or lacks visibility/permission
 
-- 对应 Bot 未配置 `Bot Token`。
-- Bot 在目标服务器缺少可见权限或已不在服务器内。
+### Bot did not leave after disconnect
 
-### Q4: 断开后为什么 Bot 还在服务器里
+- Bot Token missing/invalid
+- record may be removed while leave call fails
 
-- 常见原因是 `Bot Token` 缺失或失效。
-- 管理页会完成“记录断开”，但退服动作可能失败。
+## License
 
-## 许可证
+This project is licensed under `AGPL-3.0-only`. See [LICENSE](./LICENSE).
 
-本项目采用 `AGPL-3.0-only` 许可证，详见 [LICENSE](./LICENSE)。
+If you provide a modified version as a network service, AGPL requires making the corresponding source code available to users.
 
-如果你以网络服务方式提供二次开发版本，根据 AGPL 要求，需要向用户提供对应源代码。
+## Contributing
 
-## 致谢
-
-如果这个项目帮到了你，欢迎 Star、提 Issue、或提交 PR 一起完善。
+Issues and PRs are welcome.
